@@ -10,7 +10,7 @@ add_library(uwwfs SHARED
 target_include_directories(uwwfs PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/include/Eigen
+    ${CMAKE_SOURCE_DIR}/include/eigen
 )
 
 target_compile_options(uwwfs PRIVATE -O3 -s -fPIC)
