@@ -1,70 +1,61 @@
-# This workflow will upload a Python Package to PyPI when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-name: Upload Python Package
+name: Build and Publish to PyPI
 
 on:
+  # This workflow runs when a new release is created.
   release:
-    types: [published]
-
-permissions:
-  contents: read
+    types: [created]
+  # This allows you to run it manually from the Actions tab for testing.
+  workflow_dispatch:
 
 jobs:
-  release-build:
-    runs-on: ubuntu-latest
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # This matrix tells GitHub to run the job on both Linux and macOS
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      # (Optional) For building ARM64 wheels on Linux runners
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
 
-      - name: Build release distributions
-        run: |
-          # NOTE: put your own distribution build steps here.
-          python -m pip install build
-          python -m build
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.19.1
+        env:
+          # This tells cibuildwheel to install CMake before building.
+          CIBW_BEFORE_BUILD: "pip install cmake"
 
-      - name: Upload distributions
+      - name: Store the produced wheels as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-dists
-          path: dist/
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
 
-  pypi-publish:
+  publish_wheels:
+    name: Publish wheels to PyPI
+    # This job only runs after all the build jobs are successful
+    needs: build_wheels
     runs-on: ubuntu-latest
-    needs:
-      - release-build
-    permissions:
-      # IMPORTANT: this permission is mandatory for trusted publishing
-      id-token: write
-
-    # Dedicated environments with protections for publishing are strongly recommended.
-    # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
-    environment:
-      name: pypi
-      # OPTIONAL: uncomment and update to include your PyPI project URL in the deployment status:
-      # url: https://pypi.org/p/YOURPROJECT
-      #
-      # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
-      # ALTERNATIVE: exactly, uncomment the following line instead:
-      # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
+    
+    # This step is only executed when a release is created, not on manual runs
+    if: github.event_name == 'release' && github.event.action == 'created'
 
     steps:
-      - name: Retrieve release distributions
+      - name: Download all wheels from build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-dists
-          path: dist/
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
 
-      - name: Publish release distributions to PyPI
+      - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          # Use the API token you stored in GitHub secrets
+          password: ${{ secrets.PYPI_API_TOKEN }}
