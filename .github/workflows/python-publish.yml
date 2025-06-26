@@ -29,14 +29,14 @@ jobs:
         uses: pypa/cibuildwheel@v2.19.1
         env:
           # --- CORRECTED CONFIGURATION ---
-          # Instead of skipping, we explicitly tell cibuildwheel which versions to build.
-          # This builds for CPython 3.8 through 3.11.
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-*"
-          
+          # Force a modern manylinux image that does not have Python 3.6/3.7.
+          # This is the most reliable way to control the build environment.
+          CIBW_ARCHS_LINUX: "auto aarch64"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
+          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_28"
+
           # This tells cibuildwheel to install CMake before building.
-          # We separate the linux command to be more explicit.
           CIBW_BEFORE_BUILD: "pip install cmake"
-          CIBW_BEFORE_BUILD_LINUX: "pip install cmake && apt-get update && apt-get install -y build-essential"
 
       - name: Store the produced wheels as an artifact
         uses: actions/upload-artifact@v4
