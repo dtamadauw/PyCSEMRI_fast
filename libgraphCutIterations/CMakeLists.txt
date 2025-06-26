@@ -8,16 +8,13 @@ add_library(graphCutIterations SHARED
     ../include/maxflow/maxflow.cpp
 )
 
-target_include_directories(graphCutIterations PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/include/Eigen
-    ${CMAKE_SOURCE_DIR}/include/maxflow
-)
+# Tell this library to use the downloaded Eigen
+target_link_libraries(graphCutIterations PRIVATE eigen)
+
+# We still need the other include path for maxflow
+target_include_directories(graphCutIterations PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_compile_options(graphCutIterations PRIVATE -O3 -fPIC -w)
 
-# Install rule for scikit-build-core to pick up the binary
-install(TARGETS graphCutIterations
-    LIBRARY DESTINATION package
-    ARCHIVE DESTINATION package
-)
+install(TARGETS graphCutIterations LIBRARY DESTINATION package ARCHIVE DESTINATION package)
+
