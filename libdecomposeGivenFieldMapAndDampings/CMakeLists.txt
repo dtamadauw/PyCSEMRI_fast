@@ -5,7 +5,7 @@ add_library(decomposeGivenFieldMapAndDampings SHARED
 )
 
 target_include_directories(decomposeGivenFieldMapAndDampings PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include/eigen
+    ${CMAKE_SOURCE_DIR}/include/eigen
 )
 
 target_compile_options(decomposeGivenFieldMapAndDampings PRIVATE -O3 -Wall -fPIC)

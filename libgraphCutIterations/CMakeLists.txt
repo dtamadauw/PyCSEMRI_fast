@@ -10,8 +10,8 @@ add_library(graphCutIterations SHARED
 
 target_include_directories(graphCutIterations PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include/eigen
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include/maxflow
+    ${CMAKE_SOURCE_DIR}/include/eigen
+    ${CMAKE_SOURCE_DIR}/include/maxflow
 )
 
 target_compile_options(graphCutIterations PRIVATE -O3 -fPIC -w)
