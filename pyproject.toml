@@ -4,13 +4,14 @@
 # It tells pip to use 'scikit-build-core' to build your package.
 # scikit-build-core knows how to run CMake.
 [build-system]
-requires = ["scikit-build-core", "cmake>=3.15", "numpy"]
+requires = ["scikit-build-core>=0.8", "cmake>=3.18", "numpy"]
 build-backend = "scikit_build_core.build"
+
 
 # This section contains the metadata for your package.
 # This information will be displayed on PyPI.
 [project]
-name = "PyCSEMRI"
+name = "PyCSEMRI_fast"
 version = "0.1.0"
 description = "A package for CSEMRI with C++ accelerated components."
 readme = "README.md"  # You should create a README.md file
@@ -41,14 +42,22 @@ dependencies = [
 Homepage = "https://github.com/dtamadauw/PyCSEMRI_fast"
 "Bug Tracker" = "https://github.com/dtamadauw/PyCSEMRI_fast/issues"
 
-
-
 # This is the configuration for scikit-build-core.
 [tool.scikit-build]
-# This tells the builder that your Python package's source code is located
-# in the 'package/' directory.
 wheel.packages = ["package"]
-
-# By not including any package-data configuration, we default to letting
-# the CMake install rules dictate what goes into the wheel, which is correct.
 sdist.reproducible = false
+
+
+# --- THIS IS THE CRUCIAL ADDITION ---
+# This section directly configures cibuildwheel, bypassing environment variables.
+[tool.cibuildwheel]
+# Skip Python 3.6, 3.7, and all versions of PyPy.
+# This is the most reliable way to enforce the build matrix.
+skip = ["cp36-*", "cp37-*", "pp*"]
+
+# Specify the modern manylinux image for Linux builds.
+manylinux-x86_64-image = "manylinux_2_28"
+
+# Command to run before the build starts.
+before-build = "pip install cmake"
+
