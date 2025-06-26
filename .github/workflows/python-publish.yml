@@ -28,6 +28,9 @@ jobs:
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v2.19.1
         env:
+          # This tells cibuildwheel to skip old, unsupported Python versions
+          # and also PyPy, building only for CPython 3.8+
+          CIBW_SKIP: "cp36-* cp37-* pp*"
           # This tells cibuildwheel to install CMake before building.
           CIBW_BEFORE_BUILD: "pip install cmake"
 
