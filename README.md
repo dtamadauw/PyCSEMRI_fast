@@ -21,18 +21,13 @@ This package builds upon the work presented at the ISMRM Workshop on Fat-Water S
 
 ## Installation
 
-1. Compile the C++ code:
+This package contains C++ components and requires a compiler for installation from source. However, pre-compiled wheels are provided for common platforms (macOS, Linux), making installation easy via pip.
 
-```cd ./src```
-```make```
+# From PyPI (Recommended for Users)
 
-2. Copy the compiled static library (libuwwfs.so) to your library path.
+If you just want to use the package, you can install it directly from the Python Package Index (PyPI). This method will automatically download the correct pre-compiled version for your system.
 
-
-3. Install Python dependencies:
-
-```pip install -r requirements.txt```
-
+```pip install PyCSEMRI```
 
 
 
