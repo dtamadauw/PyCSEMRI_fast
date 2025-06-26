@@ -12,7 +12,7 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      # This matrix tells GitHub to run the job on both Linux and macOS
+      fail-fast: false # Don't cancel all jobs if one fails
       matrix:
         os: [ubuntu-latest, macos-latest]
 
@@ -28,14 +28,18 @@ jobs:
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v2.19.1
         env:
-          # --- CORRECTED CONFIGURATION ---
-          # Force a modern manylinux image that does not have Python 3.6/3.7.
-          # This is the most reliable way to control the build environment.
-          CIBW_ARCHS_LINUX: "auto aarch64"
+          # --- Final Attempt Configuration ---
+          # 1. Be explicit about skipping old Python versions. This is the most important setting.
+          CIBW_SKIP: "cp36-* cp37-* pp*"
+          
+          # 2. Add verbosity to see what cibuildwheel is doing internally.
+          CIBW_BUILD_VERBOSITY: 1
+
+          # 3. Explicitly request a modern image for Linux builds. This is a safeguard.
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
           CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_28"
-
-          # This tells cibuildwheel to install CMake before building.
+          
+          # 4. Install build dependencies.
           CIBW_BEFORE_BUILD: "pip install cmake"
 
       - name: Store the produced wheels as an artifact
