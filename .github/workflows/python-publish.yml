@@ -3,11 +3,9 @@
 name: Build and Publish to PyPI
 
 on:
-  # This triggers the workflow when you click "Publish release" in the GitHub UI.
+  # This is now the ONLY way to trigger this workflow.
   release:
     types: [published]
-  # This allows you to run the workflow manually from the Actions tab for testing.
-  workflow_dispatch:
 
 jobs:
   build_wheels:
@@ -23,14 +21,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU for ARM builds (Linux only)
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
-
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v2.19.1
-        # No 'env' block is needed here. cibuildwheel will read all of its
-        # configuration from your pyproject.toml file.
+        # All configuration is correctly handled by your pyproject.toml file.
 
       - name: Store the produced wheels as an artifact
         uses: actions/upload-artifact@v4
@@ -43,9 +36,8 @@ jobs:
     needs: build_wheels
     runs-on: ubuntu-latest
     
-    # This job only runs if the workflow was triggered by a release.
-    if: github.event_name == 'release' && github.event.action == 'published'
-
+    # There is no 'if' condition here. If the build jobs succeed, this job WILL run.
+    
     steps:
       - name: Download all wheels from build artifacts
         uses: actions/download-artifact@v4
@@ -58,5 +50,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           # This securely uses the API token you stored in GitHub secrets.
-          password: ${{ secrets.PYPI_CSEMRI }}
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
