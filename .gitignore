@@ -1,0 +1,13 @@
+# .gitignore
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+
+# Compiled binaries
+*.so
+*.pyd
+*.dll
+
