@@ -1,73 +1,35 @@
 # pyproject.toml
 
-# This section defines the build system for legacy Python versions
+# This section tells pip how to build your project.
 [build-system]
 requires = [
-    "setuptools",
+    "setuptools>=61.0", # Specify a modern setuptools
     "wheel",
     "scikit-build",
     "cmake>=3.15",
-    "numpy"  # General numpy requirement for the build process
+    "numpy"
 ]
 build-backend = "setuptools.build_meta"
 
-
-
-# This section contains the metadata for your package.
-# This information will be displayed on PyPI.
+# This section declares that some metadata is provided by setup.py
+# This is the key fix that resolves the conflict.
 [project]
-name = "PyCSEMRI_fast"
-version = "0.1.0"
-description = "A package for CSEMRI with C++ accelerated components."
-readme = "README.md"  # You should create a README.md file
-authors = [
-    { name = "Daiki Tamada", email = "dtamada@wisc.edu" },
-]
-license = { text = "GPL" } # Or another license like "BSD-3-Clause", etc.
-classifiers = [
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-]
-
-# List your Python dependencies here.
-# These will be installed by pip along with your package.
-dependencies = [
-    "numpy",
-    'scipy',
-    'scikit-image'
-    # Add other dependencies like "scipy", "matplotlib", etc.
-]
-
-# Optional: For URLs like documentation, source code, etc.
-[project.urls]
-Homepage = "https://github.com/dtamadauw/PyCSEMRI_fast"
-"Bug Tracker" = "https://github.com/dtamadauw/PyCSEMRI_fast/issues"
-
-# This is the configuration for scikit-build-core.
-[tool.scikit-build]
-wheel.packages = ["package"]
-sdist.reproducible = false
+name = "PyCSEMRI"
+dynamic = ["version", "description", "readme", "dependencies", "requires-python"]
 
 
+# --- CIBUILDWHEEL CONFIGURATION ---
 [tool.cibuildwheel]
-# Explicitly build ONLY for Python 3.6 and 3.10
+# Build for Python 3.6 and 3.10
 build = "cp36-* cp310-*"
-
-# Skip PyPy builds
 skip = "pp*"
 
-# A general command to run before all builds
+# General command to run before all builds
 before-build = "python -m pip install --upgrade pip cmake"
 
 # --- OVERRIDE FOR THE PYTHON 3.6 LINUX BUILD ---
-# This section applies special rules only when building for Python 3.6
 [[tool.cibuildwheel.overrides]]
 select = "cp36-manylinux*"
-
-# For the cp36 build, we need to install an older, compatible version of NumPy
+# Install an older, compatible version of NumPy for the Python 3.6 build
 before-build = "python -m pip install --upgrade pip && python -m pip install numpy<1.20 cmake"
 
