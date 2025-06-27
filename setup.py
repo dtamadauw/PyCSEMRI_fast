@@ -7,11 +7,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    # THIS IS THE CRITICAL FIX:
-    # We must explicitly define the package name here.
     name="PyCSEMRI",
-
-    version="0.1.0",
+    version="0.1.2", # It's good practice to bump the version for new changes
     description="A package for CSEMRI with C++ accelerated components.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -21,16 +18,18 @@ setup(
     url="https://github.com/your-username/PyCSEMRI_clean",
     license="GPL",
     
-    packages=["package"],
-    # This line is no longer needed with scikit-build and a flat structure
-    # package_dir={"": "package"}, 
+    # This now points to your new directory name
+    packages=["pycsemri"],
+    
     cmake_source_dir=".",
     
+    # These dependencies correspond to the `dynamic` "dependencies" field
     install_requires=[
         "numpy<1.20; python_version == '3.6'",
         "numpy; python_version >= '3.7'",
     ],
     
+    # This corresponds to the `dynamic` "requires-python" field
     python_requires=">=3.6",
 )
 

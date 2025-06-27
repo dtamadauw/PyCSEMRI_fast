@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy import signal
-from pygraph.classes.digraph import digraph
 from math import ceil
 from numpy.random import random, randn
 from tools.createExpansionGraphVARPRO_fast import createExpansionGraphVARPRO_fast
@@ -12,7 +11,6 @@ from decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAndDampings
 from graphCutIterations import graphCutIterations
 import scipy.io
 from scipy.interpolate import griddata
-import pickle
 import os # Import the os module
 import time
 

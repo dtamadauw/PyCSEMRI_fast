@@ -1,9 +1,8 @@
 # pyproject.toml
 
-# This section defines the build system. All package metadata is now in setup.py.
+# This section defines the build system.
 [build-system]
 requires = [
-    # THIS IS THE KEY FIX:
     # We require a version of setuptools that is compatible with Python 3.6
     "setuptools>=42",
     "wheel",
@@ -15,20 +14,17 @@ build-backend = "setuptools.build_meta"
 
 
 # --- CIBUILDWHEEL CONFIGURATION ---
-# This section remains to control the build matrix for different Python versions.
 [tool.cibuildwheel]
-# Explicitly build ONLY for Python 3.6 and 3.10
-build = "cp36-* cp310-*"
+# Expanded build matrix: builds for Python 3.6 and modern versions 3.8-3.12
+build = "cp36-* cp38-* cp39-* cp310-* cp311-* cp312-*"
 skip = "pp*"
 
 # General command to run before all builds
 before-build = "python -m pip install --upgrade pip cmake"
 
 # --- OVERRIDE FOR THE PYTHON 3.6 LINUX BUILD ---
-# This section applies special rules only when building for Python 3.6
 [[tool.cibuildwheel.overrides]]
 select = "cp36-manylinux*"
-
-# For the cp36 build, we need to install an older, compatible version of NumPy.
+# Install an older, compatible version of NumPy for the Python 3.6 build
 before-build = "python -m pip install --upgrade pip && python -m pip install 'numpy<1.20' cmake"
 
