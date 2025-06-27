@@ -1,11 +1,15 @@
 # pyproject.toml
 
-# This section defines the build system.
-# It tells pip to use 'scikit-build-core' to build your package.
-# scikit-build-core knows how to run CMake.
+# This section defines the build system for legacy Python versions
 [build-system]
-requires = ["scikit-build-core>=0.8", "cmake>=3.18", "numpy"]
-build-backend = "scikit_build_core.build"
+requires = [
+    "setuptools",
+    "wheel",
+    "scikit-build",
+    "cmake>=3.15",
+    "numpy"  # General numpy requirement for the build process
+]
+build-backend = "setuptools.build_meta"
 
 
 
@@ -49,22 +53,21 @@ wheel.packages = ["package"]
 sdist.reproducible = false
 
 
-
 [tool.cibuildwheel]
-# This is the most reliable way to enforce the build matrix.
-skip = ["cp36-*", "cp37-*", "pp*"]
+# Explicitly build ONLY for Python 3.6 and 3.10
+build = "cp36-* cp310-*"
 
-# This command will run before ANY wheel build.
-# Crucially, it upgrades pip first, which is essential in older environments,
-# then installs the necessary build tools.
-before-build = "python -m pip install --upgrade pip && python -m pip install cmake"
+# Skip PyPy builds
+skip = "pp*"
 
-# --- OVERRIDE FOR LINUX BUILDS ---
-# This is a high-priority override to ensure a modern Docker image is used,
-# completely preventing the use of the old Python 3.6 environment.
+# A general command to run before all builds
+before-build = "python -m pip install --upgrade pip cmake"
+
+# --- OVERRIDE FOR THE PYTHON 3.6 LINUX BUILD ---
+# This section applies special rules only when building for Python 3.6
 [[tool.cibuildwheel.overrides]]
-select = "*-manylinux*"
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
+select = "cp36-manylinux*"
 
+# For the cp36 build, we need to install an older, compatible version of NumPy
+before-build = "python -m pip install --upgrade pip && python -m pip install numpy<1.20 cmake"
 
