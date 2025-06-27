@@ -1,10 +1,12 @@
+# .github/workflows/python-publish.yml
+
 name: Build and Publish to PyPI
 
 on:
-  # This workflow runs when a new release is created.
+  # This triggers the workflow when you click "Publish release" in the GitHub UI.
   release:
     types: [published]
-  # This allows you to run it manually from the Actions tab for testing.
+  # This allows you to run the workflow manually from the Actions tab for testing.
   workflow_dispatch:
 
 jobs:
@@ -12,35 +14,23 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false # Don't cancel all jobs if one fails
+      fail-fast: false
       matrix:
+        # This matrix builds on both Linux and macOS.
         os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # (Optional) For building ARM64 wheels on Linux runners
-      - name: Set up QEMU
+      - name: Set up QEMU for ARM builds (Linux only)
         if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v3
 
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v2.19.1
-        env:
-          # --- Final Attempt Configuration ---
-          # 1. Be explicit about skipping old Python versions. This is the most important setting.
-          CIBW_SKIP: "cp36-* cp37-* pp*"
-          
-          # 2. Add verbosity to see what cibuildwheel is doing internally.
-          CIBW_BUILD_VERBOSITY: 1
-
-          # 3. Explicitly request a modern image for Linux builds. This is a safeguard.
-          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
-          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_28"
-          
-          # 4. Install build dependencies.
-          CIBW_BEFORE_BUILD: "pip install cmake"
+        # No 'env' block is needed here. cibuildwheel will read all of its
+        # configuration from your pyproject.toml file.
 
       - name: Store the produced wheels as an artifact
         uses: actions/upload-artifact@v4
@@ -50,12 +40,11 @@ jobs:
 
   publish_wheels:
     name: Publish wheels to PyPI
-    # This job only runs after all the build jobs are successful
     needs: build_wheels
     runs-on: ubuntu-latest
     
-    # This step is only executed when a release is created, not on manual runs
-    if: github.event_name == 'release' && github.event.action == 'created'
+    # This job only runs if the workflow was triggered by a release.
+    if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
       - name: Download all wheels from build artifacts
@@ -68,5 +57,6 @@ jobs:
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # Use the API token you stored in GitHub secrets
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          # This securely uses the API token you stored in GitHub secrets.
+          password: ${{ secrets.PYPI_CSEMRI }}
+
