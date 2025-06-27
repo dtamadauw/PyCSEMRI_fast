@@ -3,7 +3,7 @@ name: Build and Publish to PyPI
 on:
   # This workflow runs when a new release is created.
   release:
-    types: [created]
+    types: [published]
   # This allows you to run it manually from the Actions tab for testing.
   workflow_dispatch:
 
