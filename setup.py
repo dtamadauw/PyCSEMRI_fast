@@ -15,7 +15,7 @@ setup(
     
     author="Daiki Tamada",
     author_email="dtamada@wisc.edu",
-    url="https://github.com/your-username/PyCSEMRI_clean",
+    url="https://github.com/your-username/PyCSEMRI_fast",
     license="GPL",
     
     # This now points to your new directory name

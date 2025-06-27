@@ -27,7 +27,7 @@ def graphCutIterations(imDataParams, algoParams, residual, lmap, cur_ind):
         lib_name = 'libgraphCutIterations.so'
     elif sys.platform.startswith('darwin'): # macOS
         lib_name = 'libgraphCutIterations.dylib'
-    with resources.path('package', lib_name) as lib_path:
+    with resources.path('pycsemri', lib_name) as lib_path:
         lib = ctypes.CDLL(str(lib_path))
 
 

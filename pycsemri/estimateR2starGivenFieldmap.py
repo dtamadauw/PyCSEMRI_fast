@@ -1,5 +1,5 @@
 import numpy as np
-from tools.getPhiMatrixMultipeak import getPhiMatrixMultipeak
+from pycsemri.getPhiMatrixMultipeak import getPhiMatrixMultipeak
 
 
 def estimateR2starGivenFieldmap(imDataParams, algoParams, fm):

@@ -13,7 +13,7 @@ def decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fieldmap,r2starWa
         lib_name = 'libdecomposeGivenFieldMapAndDampings.so'
     elif sys.platform.startswith('darwin'): # macOS
         lib_name = 'libdecomposeGivenFieldMapAndDampings.dylib'
-    with resources.path('package', lib_name) as lib_path:
+    with resources.path('pycsemri', lib_name) as lib_path:
         cpp_lib = ctypes.CDLL(str(lib_path))
 
     # Prepare inputs for C++ function

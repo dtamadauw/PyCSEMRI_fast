@@ -11,7 +11,7 @@ elif sys.platform.startswith('linux'):
 	lib_name = 'libuwwfs.so'
 elif sys.platform.startswith('darwin'): # macOS
 	lib_name = 'libuwwfs.dylib'
-with resources.path('package', lib_name) as lib_path:
+with resources.path('pycsemri', lib_name) as lib_path:
 	libuwwfs = ctypes.CDLL(str(lib_path))
 
 

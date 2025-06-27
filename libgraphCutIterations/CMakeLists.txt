@@ -20,3 +20,4 @@ install(TARGETS graphCutIterations
     ARCHIVE DESTINATION pycsemri
 )
 
+

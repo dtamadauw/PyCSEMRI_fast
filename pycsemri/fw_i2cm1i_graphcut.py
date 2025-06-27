@@ -3,12 +3,12 @@ from scipy.sparse import csr_matrix
 from scipy import signal
 from math import ceil
 from numpy.random import random, randn
-from tools.createExpansionGraphVARPRO_fast import createExpansionGraphVARPRO_fast
-from tools.getQuadraticApprox import getQuadraticApprox
-from tools.computeResidual import computeResidual
-from tools.estimateR2starGivenFieldmap import estimateR2starGivenFieldmap
-from decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAndDampings
-from graphCutIterations import graphCutIterations
+from pycsemri.createExpansionGraphVARPRO_fast import createExpansionGraphVARPRO_fast
+from pycsemri.getQuadraticApprox import getQuadraticApprox
+from pycsemri.computeResidual import computeResidual
+from pycsemri.estimateR2starGivenFieldmap import estimateR2starGivenFieldmap
+from pycsemri.decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAndDampings
+from pycsemri.graphCutIterations import graphCutIterations
 import scipy.io
 from scipy.interpolate import griddata
 import os # Import the os module
