@@ -2,12 +2,13 @@ import h5py
 import numpy as np
 from scipy.io import loadmat
 from pycsemri.fw_i2cm1i_graphcut import fw_i2cm1i_graphcut
-from pycsemri.fwFit_ComplexLS_1r2star import fwFit_ComplexLS_1r2star
+from pycsemri.decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAndDampings
 from pycsemri.computeFF import computeFF
 from pycsemri.create_robust_mask import create_robust_mask
+from pycsemri.fwFit_ComplexLS_1r2star import fwFit_ComplexLS_1r2star
 
 # Open the HDF5 file
-file = h5py.File('/home/dxt005/home/Tools/WaterFatPython/Data/invivo/IdealChanCombData_16415_2.h5', 'r')
+file = h5py.File('PATH TO CHANNELCOMB H5 FILE', 'r')
 
 xres = file['Header']['ImageXRes'][0]
 yres = file['Header']['ImageYRes'][0]

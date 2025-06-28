@@ -238,7 +238,7 @@ void fwFit_MixedLS_1r2star::initialize_te(imDataParams_str *imDataParams_in, alg
 void fwFit_MixedLS_1r2star::fit_all(){
 
 
-    printf("In fit_all()\n");
+    //printf("In fit_all()\n");
 
     lsqcpp::LevenbergMarquardtX<double, ParabolicError_Mixed> optimizer;
     // Set number of iterations as stop criterion.
@@ -257,7 +257,7 @@ void fwFit_MixedLS_1r2star::fit_all(){
 
 
 
-    printf("Assign data structure\n");
+    //printf("Assign data structure\n");
 
     data_str data;
     data.nte = nte;

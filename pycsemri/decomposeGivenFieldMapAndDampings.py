@@ -63,7 +63,7 @@ def decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fieldmap,r2starWa
         c_double_p, c_double_p  # s_out
     ]
     
-    print("\nRunning C++ version...")
+    #print("\nRunning C++ version...")
     cpp_func(
         images_real.ctypes.data_as(c_double_p), images_imag.ctypes.data_as(c_double_p),
         fieldmap_c.ctypes.data_as(c_double_p), r2starWater_c.ctypes.data_as(c_double_p), r2starFat_c.ctypes.data_as(c_double_p),
@@ -75,7 +75,7 @@ def decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fieldmap,r2starWa
         B_cpp_real.ctypes.data_as(c_double_p), B_cpp_imag.ctypes.data_as(c_double_p),
         s_cpp_real.ctypes.data_as(c_double_p), s_cpp_imag.ctypes.data_as(c_double_p)
     )
-    print("...Done.")
+    #print("...Done.")
 
     # Reconstruct complex data from C++ buffers
     amps_cpp = amps_cpp_real + 1j * amps_cpp_imag

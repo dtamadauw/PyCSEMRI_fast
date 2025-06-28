@@ -106,15 +106,15 @@ def fw_i2cm1i_graphcut(imDataParams_in, algoParams_in):
     imDataParams['PrecessionIsClockwise'] = PrecessionIsClockwise_orig
 
 
-    start = time.time()
+    #start = time.time()
     r2starmap, residual_r2s = estimateR2starGivenFieldmap(imDataParams, algoParams, fm)
-    end = time.time()
-    print("Process Time estimateR2starGivenFieldmap: %f" % (end - start))
+    #end = time.time()
+    #print("Process Time estimateR2starGivenFieldmap: %f" % (end - start))
 
-    start = time.time()
+    #start = time.time()
     amps = decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fm,r2starmap,r2starmap )
-    end = time.time()
-    print("Process Time decomposeGivenFieldMapAndDampings: %f" % (end - start))
+    #end = time.time()
+    #print("Process Time decomposeGivenFieldMapAndDampings: %f" % (end - start))
 
 
     w = np.squeeze(amps[:,:,0,:])
