@@ -7,8 +7,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="PyCSEMRI",
-    version="0.1.7", # It's good practice to bump the version for new changes
+    name="pycsemri",
+    version="0.1.8", # It's good practice to bump the version for new changes
     description="A package for CSEMRI with C++ accelerated components.",
     long_description=long_description,
     long_description_content_type="text/markdown",
