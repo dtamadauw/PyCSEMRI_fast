@@ -3,7 +3,13 @@
 add_library(decomposeGivenFieldMapAndDampings SHARED
     decomposeGivenFieldMapAndDampings.cpp
 )
-target_link_libraries(decomposeGivenFieldMapAndDampings PRIVATE eigen)
+
+
+target_include_directories(decomposeGivenFieldMapAndDampings PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    ${eigen_SOURCE_DIR}
+)
+
 target_compile_options(decomposeGivenFieldMapAndDampings PRIVATE -O3 -Wall -fPIC)
 
 # The destination is now 'pycsemri'

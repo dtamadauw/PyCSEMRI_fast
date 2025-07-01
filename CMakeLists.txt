@@ -8,19 +8,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # --- Add FetchContent to download Eigen ---
 include(FetchContent)
 
-# Declare the Eigen project content
+# --- Declare Dependencies ---
 FetchContent_Declare(
   eigen
-  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG 3.4.0 # A recent, stable version of Eigen
+  URL      file://${PROJECT_SOURCE_DIR}/include/minimal-eigen.tar.bz2
 )
 
-# Make Eigen available to our project. This will download it if needed
-# and create an 'eigen' subdirectory in our build folder.
-FetchContent_MakeAvailable(eigen)
-# ----------------------------------------
+# --- New Method for Boost (Headers-Only) ---
+FetchContent_Declare(
+  boost
+  # Switch to the .zip archive format
+  URL      file://${PROJECT_SOURCE_DIR}/include/minimal_boost.tar.bz2
+)
 
-# Add our library subdirectories
+#  Make the content available ---
+FetchContent_MakeAvailable(eigen)
+FetchContent_MakeAvailable(boost)
+
+
 add_subdirectory(libuwwfs)
 add_subdirectory(libgraphCutIterations)
 add_subdirectory(libdecomposeGivenFieldMapAndDampings)

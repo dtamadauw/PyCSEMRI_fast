@@ -1,6 +1,8 @@
 #include "graphCutIterations.h"
 #include "createExpansionGraphVARPRO_fast.h"
-#include "graph.h"
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/boykov_kolmogorov_max_flow.hpp>
+
 
 #include <iostream>
 #include <vector>
@@ -14,6 +16,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/CXX11/Tensor>
+
+
 
 // --- Forward declaration to fix linker error ---
 struct IntermediateResults;
@@ -174,8 +178,10 @@ void graphCutIterations_cpp(
     std::string initial_prefix = output_dir + "/cpp_initial";
     // ADDED: Save residual data
     Eigen::TensorMap<const Tensor3d> residual_tensor_map(residual_data, sx, sy, num_fms);
-    /*
+
+#ifdef DEBUG_GC
     write_debug_tensor(initial_prefix + "_residual_data.txt", residual_tensor_map);
+    write_debug_data(initial_prefix + "_dfm.txt", VectorXd::Constant(1, dfm));
     write_debug_data(initial_prefix + "_sx.txt", VectorXd::Constant(1, sx));
     write_debug_data(initial_prefix + "_sy.txt", VectorXd::Constant(1, sy));
     write_debug_data(initial_prefix + "_num_fms.txt", VectorXd::Constant(1, num_fms));
@@ -188,45 +194,55 @@ void graphCutIterations_cpp(
     write_debug_data(initial_prefix + "_period.txt", VectorXd::Constant(1, period));
     write_debug_data(initial_prefix + "_dt.txt", VectorXd::Constant(1, dt));
     write_debug_data_vec(initial_prefix + "_TE.txt", TE);
-        */
+#endif
 
     VectorXd stepoffset_vec(sx * sy);
     for(int i=0; i < sx*sy; ++i) stepoffset_vec(i) = i * numLocalMin;
-    //write_debug_data(initial_prefix + "_stepoffset.txt", stepoffset_vec);
-    
-    for (int kg = 1; kg <= num_iters; ++kg) {
-        //std::cout << "--- C++: Iteration " << kg << " ---" << std::endl;
-        //std::string iter_prefix = output_dir + "/cpp_iter_" + std::to_string(kg);
+    double prob_bigJump = 1.0;
 
-        double prob_bigJump = 0.5;
+    for (int kg = 1; kg <= num_iters; ++kg) {
+#ifdef DEBUG_GC
+        std::cout << "--- C++: Iteration " << kg << " ---" << std::endl;
+        std::string iter_prefix = output_dir + "/cpp_iter_" + std::to_string(kg);
+#endif
+        
         if (kg == 1 && STARTBIG) {
             lambdamap = lambda_val * lmap;
             prob_bigJump = 1.0;
         } else if ((kg == dkg && SMOOTH_NOSIGNAL) || !STARTBIG) {
             lambdamap = lambda_val * lmap;
+            prob_bigJump = 0.5;
         }
-        //write_debug_data(iter_prefix + "_lambdamap.txt", lambdamap);
-        //write_debug_data(iter_prefix + "_cur_ind_start.txt", cur_ind);
 
         int cur_sign = (kg % 2 == 0) ? 1 : -1;
-        //write_debug_data(iter_prefix + "_cur_sign.txt", VectorXd::Constant(1, cur_sign));
         MatrixXd cur_step(sx, sy);
 
+#ifdef DEBUG_GC
+        write_debug_data(iter_prefix + "_lambdamap.txt", lambdamap);
+        write_debug_data(iter_prefix + "_cur_ind_start.txt", cur_ind);
+        write_debug_data(iter_prefix + "_cur_sign.txt", VectorXd::Constant(1, cur_sign));
+#endif
         auto cur_step1d = flatten_F_style(cur_step);
         auto cur_ind1d = flatten_F_style(cur_ind);
         
-        //if(kg > 2) prob_bigJump = 0.0;//Debug
-        //else prob_bigJump = 1.0;
-        
-        if (dis(gen) < prob_bigJump) {
-             //printf("C++: prob_bigJump TRUE\n");
+
+        double rn = dis(gen);
+#ifdef DEBUG_GC
+        printf("RN=%f/", rn);
+        if(kg > 15) prob_bigJump = 0.0;//Debug
+        else prob_bigJump = 1.0;
+        prob_bigJump = 1.0;
+#endif
+        if (rn < prob_bigJump) {
+#ifdef DEBUG_GC
+             printf("C++: prob_bigJump TRUE\n");
+#endif
              Tensor3d repCurInd_tensor(numLocalMin, sx, sy);
              for(long r=0; r<numLocalMin; ++r) {
                  for(int c=0; c<sy; ++c) for(int i=0; i<sx; ++i) {
                      repCurInd_tensor(r,i,c) = cur_ind(i,c);
                  }
              }
-             //write_debug_tensor(iter_prefix + "_repCurInd.txt", repCurInd_tensor);
 
              Eigen::Tensor<bool, 3, Eigen::RowMajor> stepLocator_bool_tensor;
              if(cur_sign > 0) {
@@ -239,30 +255,23 @@ void graphCutIterations_cpp(
             Eigen::Tensor<double, 2, Eigen::RowMajor> stepLocator_tensor_sum = stepLocator_bool_tensor.cast<double>().sum(sum_axis);
             MatrixXd stepLocator = Eigen::Map<MatrixXd>(stepLocator_tensor_sum.data(), sx, sy);
             if(cur_sign > 0) stepLocator.array() += 1;
-            //write_debug_data(iter_prefix + "_stepLocator.txt", stepLocator);
              
             MatrixXb validStep(sx, sy);
             if(cur_sign > 0) for(int i=0; i<sx*sy; ++i) validStep(i) = masksignal(i) && (stepLocator(i) <= numMinimaPerVoxel(i));
             else for(int i=0; i<sx*sy; ++i) validStep(i) = masksignal(i) && (stepLocator(i) >= 1);
-            //write_debug_data_bool(iter_prefix + "_validStep.txt", validStep);
              
             VectorXd resLocalMinima1D(numLocalMin * sx * sy);
             int count = 0;
             for (int j = 0; j < sy; ++j) for (int i = 0; i < sx; ++i) for (long l = 0; l < numLocalMin; ++l) {
                 resLocalMinima1D(count++) = resLocalMinima_tensor(l, i, j);
             }
-            //write_debug_data(iter_prefix + "_resLocalMinima1D.txt", resLocalMinima1D);
 
             MatrixXd nextValue = MatrixXd::Zero(sx, sy);
             
             auto nextValue1D = flatten_F_style(nextValue);
             auto stepLocator1D = flatten_F_style(stepLocator);
             auto validStep_flat = flatten_F_style(validStep);
-            //auto cur_ind1d = flatten_F_style(cur_ind);
 
-            //write_debug_data(iter_prefix + "_stepLocator1D.txt", stepLocator1D);
-            //write_debug_data(iter_prefix + "_validStep_flat.txt", validStep_flat.cast<int>());
-            //write_debug_data(iter_prefix + "_cur_ind1d.txt", cur_ind1d);
 
             for(int i=0; i<sx*sy; ++i) {
                 if(validStep_flat(i)) {
@@ -273,13 +282,19 @@ void graphCutIterations_cpp(
                 }
             }
             nextValue = reshape_to_F_style_2D(nextValue1D, sx, sy);//Eigen::Map<MatrixXd>(nextValue1D.data(),sx, sy);
-            //write_debug_data(iter_prefix + "_nextValue.txt", nextValue);
-            //write_debug_data(iter_prefix + "_nextValue1D.txt", nextValue1D);
+
+#ifdef DEBUG_GC
+            write_debug_data(iter_prefix + "_stepLocator1D.txt", stepLocator1D);
+            write_debug_data(iter_prefix + "_validStep_flat.txt", validStep_flat.cast<int>());
+            write_debug_data(iter_prefix + "_cur_ind1d.txt", cur_ind1d);
+            write_debug_data(iter_prefix + "_nextValue.txt", nextValue);
+            write_debug_data(iter_prefix + "_nextValue1D.txt", nextValue1D);
+#endif
+
 
             //auto cur_step1d = flatten_F_style(cur_step);
             
             double nosignal_jump = (dis(gen) < 0.5) ? cur_sign * round(abs(deltaF(1)) / dfm) : cur_sign * abs(round((period - abs(deltaF(1))) / dfm));
-            //write_debug_data(iter_prefix + "_nosignal_jump.txt", VectorXd::Constant(1, nosignal_jump));
             
             for(int i=0; i<sx*sy; ++i) {
                 if(validStep_flat(i)) {
@@ -289,15 +304,15 @@ void graphCutIterations_cpp(
                 }
             }
             cur_step = reshape_to_F_style_2D(cur_step1d, sx, sy);//Eigen::Map<MatrixXd>(cur_step1d.data(), sx, sy);
-            //write_debug_data(iter_prefix + "_cur_step1d.txt", cur_step1d);
 
 
 
         } else {
-            //printf("C++: prob_bigJump FALSE\n");
-            //write_debug_data(iter_prefix + "_cur_sign.txt", VectorXd::Constant(1, cur_sign));
+#ifdef DEBUG_GC
+            printf("C++: prob_bigJump FALSE\n");
+            write_debug_data(iter_prefix + "_cur_sign.txt", VectorXd::Constant(1, cur_sign));
+#endif
             double rnd_numf = std::ceil(std::abs(normal_dis(gen) * 3.0));
-            //printf("rnd_numf = %f\n", rnd_numf);
             double all_jump = cur_sign * rnd_numf;
             cur_step = MatrixXd::Constant(sx, sy, all_jump);
             MatrixXd nextValue = cur_ind + cur_step;
@@ -306,95 +321,119 @@ void graphCutIterations_cpp(
                 else if (cur_sign < 0 && nextValue(i) < 1) cur_step(i) = 1 - cur_ind(i);
             }
 
-            //auto cur_step1d = flatten_F_style(cur_step);
-            //auto cur_ind1d = flatten_F_style(cur_ind);
+            cur_step1d = flatten_F_style(cur_step);
+            cur_ind1d = flatten_F_style(cur_ind);
         }
-        //write_debug_data(iter_prefix + "_cur_step.txt", cur_step);
+
         
         std::vector<double> A_values;
         std::vector<int> A_rows, A_cols;
         auto lambdamap1d = flatten_F_style(lambdamap);
         createExpansionGraphVARPRO_fast_cpp(residual_data, num_fms, sx, sy, dfm, lambdamap1d.data(), size_clique, cur_ind1d.data(), cur_step1d.data(), A_values, A_rows, A_cols);
+
         
-        //write_debug_data_vec(iter_prefix + "_A_values.txt", A_values);
-        //write_debug_data_vec(iter_prefix + "_A_rows.txt", A_rows);
-        //write_debug_data_vec(iter_prefix + "_A_cols.txt", A_cols);
-        
-        // --- Graph-Cut and Update Logic (Corrected) ---
-        // CORRECTED: Use a typedef for clarity and correctness
-        typedef Graph<int, int, int> GraphType;
+        // Define types for the Boost Graph
+        typedef boost::adjacency_list_traits<boost::vecS, boost::vecS, boost::directedS> traits;
+
+        typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS,
+            // Vertex properties bundle
+            boost::property<boost::vertex_name_t, std::string,
+            boost::property<boost::vertex_index_t, long,
+                boost::property<boost::vertex_color_t, boost::default_color_type,
+                boost::property<boost::vertex_distance_t, long,
+                    boost::property<boost::vertex_predecessor_t, traits::edge_descriptor> > > > >,
+
+            // Edge properties bundle
+            boost::property<boost::edge_capacity_t, int,
+            boost::property<boost::edge_residual_capacity_t, int,
+                boost::property<boost::edge_reverse_t, traits::edge_descriptor> > >
+        > GraphType;
+
+
         int num_pixel_nodes = sx * sy;
-        int num_graph_nodes = num_pixel_nodes + 2;
-        GraphType *g = new GraphType(num_pixel_nodes, A_values.size());
-        
-        // CORRECTED: Call add_node() in a loop
-        g->add_node(num_pixel_nodes);
+        GraphType g(num_pixel_nodes + 2);
+
+        // Get property maps
+        boost::property_map<GraphType, boost::edge_capacity_t>::type capacity = boost::get(boost::edge_capacity, g);
+        boost::property_map<GraphType, boost::edge_reverse_t>::type rev = boost::get(boost::edge_reverse, g);
+
+        // Add nodes and edges to the graph
+        auto source = boost::vertex(num_pixel_nodes, g);
+        auto sink = boost::vertex(num_pixel_nodes + 1, g);
 
         for (size_t i = 0; i < A_values.size(); ++i) {
-            int u = A_rows[i];
-            int v = A_cols[i];
-            int capacity = static_cast<int>(A_values[i]);
-            if (capacity < 0) capacity = 0;
+            int u_idx = A_rows[i];
+            int v_idx = A_cols[i];
+            int cap = static_cast<int>(A_values[i]);
+            if (cap < 0) cap = 0;
 
-            if (u == 0) {
-                g->add_tweights(v - 1, capacity, 0);
-            } else if (v == num_graph_nodes - 1) {
-                g->add_tweights(u - 1, 0, capacity);
-            } else {
-                g->add_edge(u - 1, v - 1, capacity, 0);
+            if (u_idx == 0) { // Source link
+                auto u = source;
+                auto v = boost::vertex(v_idx - 1, g);
+                auto e1 = boost::add_edge(u, v, g);
+                auto e2 = boost::add_edge(v, u, g);
+                capacity[e1.first] = cap;
+                capacity[e2.first] = 0;
+                rev[e1.first] = e2.first;
+                rev[e2.first] = e1.first;
+            } else if (v_idx == num_pixel_nodes + 1) { // Sink link
+                auto u = boost::vertex(u_idx - 1, g);
+                auto v = sink;
+                auto e1 = boost::add_edge(u, v, g);
+                auto e2 = boost::add_edge(v, u, g);
+                capacity[e1.first] = cap;
+                capacity[e2.first] = 0;
+                rev[e1.first] = e2.first;
+                rev[e2.first] = e1.first;
+            } else { // Neighbor link
+                auto u = boost::vertex(u_idx - 1, g);
+                auto v = boost::vertex(v_idx - 1, g);
+                auto e1 = boost::add_edge(u, v, g);
+                auto e2 = boost::add_edge(v, u, g);
+                capacity[e1.first] = cap;
+                capacity[e2.first] = 0; // Assuming directed edges for n-links
+                rev[e1.first] = e2.first;
+                rev[e2.first] = e1.first;
             }
         }
-        
-        g->maxflow();
-        
-        std::vector<bool> cut1(num_graph_nodes, true);
-        std::vector<bool> cut1b(num_graph_nodes, true);
-        cut1b[num_graph_nodes - 1] = false;
 
+        boost::boykov_kolmogorov_max_flow(g, source, sink);
+
+        std::vector<bool> cut1(num_pixel_nodes + 2, true);
+        std::vector<bool> cut1b(num_pixel_nodes + 2, true);
+        cut1b[num_pixel_nodes + 1] = false;
+
+        boost::property_map<GraphType, boost::vertex_color_t>::type color = boost::get(boost::vertex_color, g);
         for (int i = 0; i < num_pixel_nodes; ++i) {
-             // CORRECTED: Access the SINK enum through the full templated type
-            if (g->what_segment(i) == GraphType::SINK) {
+            if (color[boost::vertex(i, g)] == color[sink]) { // Part of the SINK side of the cut
                 cut1[i + 1] = false;
             }
         }
         cut1[0] = true;
-        
+
         double sum_A_cut1b = 0;
         double sum_A_cut1 = 0;
         for (size_t i = 0; i < A_values.size(); ++i) {
             if (cut1b[A_rows[i]] && !cut1b[A_cols[i]]) sum_A_cut1b += A_values[i];
             if (cut1[A_rows[i]] && !cut1[A_cols[i]]) sum_A_cut1 += A_values[i];
         }
-
          
         MatrixXd cur_indST = cur_ind; 
         if (sum_A_cut1b > sum_A_cut1) {
             MatrixXb cut_matrix(sx, sy);
             for (int i = 0; i < num_pixel_nodes; ++i) {
-                 // CORRECTED: Access the SINK enum through the full templated type
-                 cut_matrix(i % sx, i / sx) = (g->what_segment(i) == GraphType::SINK);
+                 cut_matrix(i % sx, i / sx) = (color[boost::vertex(i, g)] == color[sink]);
             }
             cur_indST = cur_ind + cur_step.cwiseProduct(cut_matrix.cast<double>());
-            //write_debug_data(iter_prefix + "_cur_ind.txt", cur_ind);
-            //write_debug_data_bool(iter_prefix + "_cut_matrix.txt", cut_matrix);
         }
-
-        //write_debug_data_vec(iter_prefix + "_cut1.txt", cut1);
-        //write_debug_data_vec(iter_prefix + "_cut1b.txt", cut1b);
-        //write_debug_data(iter_prefix + "_cur_indST.txt", cur_indST);
-        delete g;
 
         cur_ind = cur_indST;
         cur_ind = cur_ind.cwiseMax(1.0).cwiseMin(static_cast<double>(num_fms));
         
         for(int i=0; i<sx; ++i) for(int j=0; j<sy; ++j) {
-            //printf("index loop (%d,%d)", i, j);
             int index = static_cast<int>(round(cur_ind(i, j))) - 1;
             if (index >= 0 && index < fms.size()) fm(i, j) = fms(index);
         }
-
-        //write_debug_data(iter_prefix + "_fm.txt", fm);
-
     }
 
     *fm_out = new double[sx * sy];

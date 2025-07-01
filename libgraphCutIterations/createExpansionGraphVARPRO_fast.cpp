@@ -138,7 +138,7 @@ void createExpansionGraphVARPRO_fast_cpp(
     std::ofstream loop_debug_file("cpp_loop_debug.txt");
 #endif
     // --------------------------------------------------------------------
-    // 2. Main Loop: Calculate Pairwise Clique Costs
+    //  Main Loop: Calculate Pairwise Clique Costs
     // --------------------------------------------------------------------
     for (int dx = -size_clique; dx <= size_clique; ++dx) {
         for (int dy = -size_clique; dy <= size_clique; ++dy) {
