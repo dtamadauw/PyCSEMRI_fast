@@ -9,8 +9,7 @@ requires = [
     "scikit-build",
     "cmake>=3.15",
     "numpy",
-    "h5py",
-    "scikit-image"
+    "h5py"
 ]
 build-backend = "setuptools.build_meta"
 
