@@ -8,8 +8,7 @@ requires = [
     "wheel",
     "scikit-build",
     "cmake>=3.15",
-    "numpy",
-    "h5py"
+    "numpy"
 ]
 build-backend = "setuptools.build_meta"
 
