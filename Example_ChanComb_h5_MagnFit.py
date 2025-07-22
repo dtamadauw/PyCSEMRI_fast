@@ -8,7 +8,7 @@ from create_robust_mask import create_robust_mask
 
 
 # Open the HDF5 file
-file = h5py.File('/home/dxt005/home/Tools/WaterFatPython/Data/invivo/IdealChanCombData_16415_2.h5', 'r')
+file = h5py.File([PATH TO CHANNELCOMB.h5 file], 'r')
 
 xres = file['Header']['ImageXRes'][0]
 yres = file['Header']['ImageYRes'][0]
