@@ -1,0 +1,12 @@
+Input Data (cursr):
+[ 4.66917 6.47628 4.84978 5.1607 4.63752 4.49057 ]
+Initial Guess:
+[ 5.84795 0 0.955115 0 28.0423 -49.8311 ]
+Status: 1 (NumericalIssue)
+Iterations: 4
+Func Evals: 4
+Jac Evals: 3
+Final Fnorm (Residual Norm): 0.921946
+Final Param Norm:            57.4858
+Final Params:
+[ 5.84795 0 0.955115 0 28.0423 -49.8311 ]

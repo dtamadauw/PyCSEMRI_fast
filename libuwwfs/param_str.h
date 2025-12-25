@@ -1,9 +1,13 @@
 #ifndef _H_PARAM_STR_
 #define _H_PARAM_STR_
 
+#include <cmath> 
+
+
 struct data_str{
 
     int nte;
+    int NUM_MAGN;
     double *cursr;
     double *cursi;
     double *te;
@@ -21,7 +25,13 @@ struct algoParams_str{
     double species_fat_freq[32];
     int NUM_WAT_PEAKS;
     int NUM_FAT_PEAKS;
+    double range_fm[2];
     int NUM_FMS;
+    double range_r2star[2];
+    int NUM_R2STARS;
+    double mu; // Spatial regularization weight
+    double mask_threshold;
+    int SUBSAMPLE; // subsampling
 };
 
 struct initParams_str{
@@ -53,7 +63,18 @@ struct outParams_str{
     double *fat_r_amp;
     double *wat_i_amp;
     double *fat_i_amp;
+    double *fit_r_amp;
+    double *fit_i_amp;
 };
 
+struct outInitParams_str{
+    double *r2s_init;
+    double *fm_init;
+    double *masksignal_init;
+    double *wat_r_amp;
+    double *fat_r_amp;
+    double *wat_i_amp;
+    double *fat_i_amp;
+};
 
 #endif	// _H_PARAM_STR_

@@ -5,7 +5,7 @@ from pycsemri.fw_i2cm1i_graphcut import fw_i2cm1i_graphcut
 from pycsemri.decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAndDampings
 from pycsemri.computeFF import computeFF
 from pycsemri.create_robust_mask import create_robust_mask
-from pycsemri.fwFit_ComplexLS_1r2star import fwFit_ComplexLS_1r2star
+from pycsemri.fwFit_MixedLS_1r2star import fwFit_MixedLS_1r2star
 
 # Open the HDF5 file
 file = h5py.File('PATH TO CHANNELCOMB H5 FILE', 'r')
@@ -86,7 +86,7 @@ for sl in range(10,26):
     mask = create_robust_mask(np.abs(ims[:,:,0,sl]), percentile_low=0, percentile_high=50)
     initParams['masksignal'] = mask
 
-    outParams = fwFit_ComplexLS_1r2star(imDataParams, algoParams, initParams)
+    outParams = fwFit_VarproLS_1r2star(imDataParams, algoParams, initParams)
 
     R2s3D[:,:,sl] = outParams['r2starmap']
     PDFF3D[:,:,sl] = computeFF( outParams )

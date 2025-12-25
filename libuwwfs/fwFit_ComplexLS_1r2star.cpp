@@ -2,25 +2,64 @@
 
 
 
-// Implement an objective functor for Eigen.
-struct ParabolicError
+
+
+void fwFit_ComplexLS_1r2star::fitted_line(const Eigen::VectorXd &xval, Eigen::VectorXd &fval)
 {
-    constexpr static bool ComputesJacobian = true;
-    data_str *data;
+    assert(xval.size() % 2 == 0);
 
-    template<typename Scalar, int Inputs, int Outputs>
-    void operator()(const Eigen::Matrix<Scalar, Inputs, 1> &xval,
-                    Eigen::Matrix<Scalar, Outputs, 1> &fval,
-                    Eigen::Matrix<Scalar, Outputs, Inputs> &jacobian) const
+    double shatr, shati, CS, SN, EXP;;
+    double curJ1,curJ2,curJ3;
+    double curJ4,curJ5,curJ6;
+    double expr2, sinfm, cosfm;
+
+    double Wr = xval(0);
+    double Wi = xval(1);
+    double Fr = xval(2);
+    double Fi = xval(3);
+    double r2 = xval(4);
+    double fieldmap = xval(5);
+
+    // calculate the error vector
+    fval.resize(nte*2);
+    for(int kt = 0; kt < nte; ++kt)
     {
-        assert(xval.size() % 2 == 0);
+        CS = cos(2*PI*fieldmap*te[kt]);
+        SN = sin(2*PI*fieldmap*te[kt]);
+        EXP = exp(-te[kt]*r2);
+
+        shatr = CS*EXP*(Wr*swr[kt] + Fr*sfr[kt] - Wi*swi[kt] - Fi*sfi[kt]) - SN*EXP*(Wr*swi[kt] + Fr*sfi[kt] + Wi*swr[kt] + Fi*sfr[kt]);
+        shati = SN*EXP*(Wr*swr[kt] + Fr*sfr[kt] - Wi*swi[kt] - Fi*sfi[kt]) + CS*EXP*(Wr*swi[kt] + Fr*sfi[kt] + Wi*swr[kt] + Fi*sfr[kt]);
+
+        fval(kt) = shatr;
+        fval(kt+nte) = shati;
+    }
+    
+}
 
 
-        double shatr, shati, CS, SN, EXP;;
-        double curJ1,curJ2,curJ3;
-        double curJ4,curJ5,curJ6;
-        double expr2, sinfm, cosfm;
+// Implement an objective functor for Eigen.
+struct ParabolicErrorFunctor
+{
+    enum {
+        InputsAtCompileTime = Eigen::Dynamic,
+        ValuesAtCompileTime = Eigen::Dynamic
+    };
 
+    data_str *data;
+    int m_inputs; // Number of parameters (p = 6)
+    int m_values; // Number of residuals (n = nte * 2)
+
+    // Constructor to set dimensions
+    ParabolicErrorFunctor(data_str *d, int nte) : data(d) 
+    {
+        m_inputs = 6;       // p = 6 (Wr, Wi, Fr, Fi, R2, FM)
+        m_values = nte * 2; // n = 2 * nte
+    }
+
+    int operator()(const Eigen::VectorXd &xval, Eigen::VectorXd &fval) const
+    {
+        // This is your *exact* f(x) calculation from ParabolicError
         int nte = data->nte;
         double *cursr = data->cursr;
         double *cursi = data->cursi;
@@ -30,33 +69,47 @@ struct ParabolicError
         double *sfr = data->sfr;
         double *sfi = data->sfi;
 
+        
+        double Wr = xval(0), Wi = xval(1), Fr = xval(2);
+        double Fi = xval(3), r2 = xval(4), fieldmap = xval(5);
+        double shatr, shati, CS, SN, EXP;
 
-        double Wr = xval(0);
-        double Wi = xval(1);
-        double Fr = xval(2);
-        double Fi = xval(3);
-        double r2 = xval(4);
-        double fieldmap = xval(5);
-
-        // calculate the error vector
-        fval.resize(nte*2);
-        for(lsqcpp::Index kt = 0; kt < nte; ++kt)
+        for(int kt = 0; kt < nte; ++kt)
         {
-
             CS = cos(2*PI*fieldmap*te[kt]);
             SN = sin(2*PI*fieldmap*te[kt]);
             EXP = exp(-te[kt]*r2);
 
             shatr = CS*EXP*(Wr*swr[kt] + Fr*sfr[kt] - Wi*swi[kt] - Fi*sfi[kt]) - SN*EXP*(Wr*swi[kt] + Fr*sfi[kt] + Wi*swr[kt] + Fi*sfr[kt]);
             shati = SN*EXP*(Wr*swr[kt] + Fr*sfr[kt] - Wi*swi[kt] - Fi*sfi[kt]) + CS*EXP*(Wr*swi[kt] + Fr*sfi[kt] + Wi*swr[kt] + Fi*sfr[kt]);
-            /*Callback f(x)*/
+
             fval(kt) = shatr - cursr[kt];
             fval(kt+nte) = shati - cursi[kt];
-
         }
-        // calculate the jacobian explicitly
-        jacobian.setZero(nte*2, xval.size());
-        for(lsqcpp::Index kt = 0; kt < nte; ++kt)
+        return 0; // Success
+    }
+
+    // This computes the Jacobian matrix J
+    int df(const Eigen::VectorXd &xval, Eigen::MatrixXd &jacobian) const
+    {
+        // This is your *exact* Jacobian calculation from ParabolicError
+        int nte = data->nte;
+        double *cursr = data->cursr;
+        double *cursi = data->cursi;
+        double *te = data->te;
+        double *swr = data->swr;
+        double *swi = data->swi;
+        double *sfr = data->sfr;
+        double *sfi = data->sfi;
+
+        
+        double Wr = xval(0), Wi = xval(1), Fr = xval(2);
+        double Fi = xval(3), r2 = xval(4), fieldmap = xval(5);
+        double shatr, shati, CS, SN, EXP;
+        double curJ1, curJ2, curJ3, curJ4, curJ5, curJ6;
+        double expr2, sinfm, cosfm;
+
+        for(int kt = 0; kt < nte; ++kt)
         {
             CS = cos(2*PI*fieldmap*te[kt]);
             SN = sin(2*PI*fieldmap*te[kt]);
@@ -102,10 +155,14 @@ struct ParabolicError
             jacobian(kt,5) = curJ6;
             curJ6 =  2*PI*te[kt]*(cosfm*expr2*(Wr*swr[kt] + Fr*sfr[kt] - Wi*swi[kt] - Fi*sfi[kt]) - sinfm*expr2*(Wr*swi[kt] + Fr*sfi[kt] + Wi*swr[kt] + Fi*sfr[kt]));
             jacobian(kt+nte,5) = curJ6;
-            
-        }   
-        
+        }
+        return 0; // Success
     }
+
+
+    int inputs() const { return m_inputs; }
+    int values() const { return m_values; }
+    
 };
 
 
@@ -164,6 +221,8 @@ void fwFit_ComplexLS_1r2star::initialize_te(imDataParams_str *imDataParams_in, a
 
     outR2 = new double[nx*ny];
     outFieldmap =  new double[nx*ny];
+    fitSr = new double[nx*ny*nte];
+    fitSi = new double[nx*ny*nte];
     outWr =  new double[nx*ny];
     outWi =  new double[nx*ny];
     outFr =  new double[nx*ny];
@@ -194,28 +253,6 @@ void fwFit_ComplexLS_1r2star::initialize_te(imDataParams_str *imDataParams_in, a
 
 void fwFit_ComplexLS_1r2star::fit_all(){
 
-
-    //printf("In fit_all()\n");
-
-    lsqcpp::LevenbergMarquardtX<double, ParabolicError> optimizer;
-    // Set number of iterations as stop criterion.
-    optimizer.setMaximumIterations(50);
-    // Set the minimum length of the gradient.
-    optimizer.setMinimumGradientLength(1e-4);
-    // Set the minimum length of the step.
-    optimizer.setMinimumStepLength(1e-4);
-    // Set the minimum least squares error.
-    optimizer.setMinimumError(0);
-    // Set the parameters of the step method (Levenberg Marquardt).
-    optimizer.setMethodParameters({1.0, 2.0, 0.5, 100});
-    // Turn verbosity on, so the optimizer prints status updates after each
-    // iteration.
-    optimizer.setVerbosity(0);
-
-
-
-    //printf("Assign data structure\n");
-
     data_str data;
     data.nte = nte;
     data.cursr = cursr;
@@ -226,12 +263,17 @@ void fwFit_ComplexLS_1r2star::fit_all(){
     data.sfr = sfr;
     data.sfi = sfi;
 
-    ParabolicError costFunction;
-    costFunction.data = &data;
-    optimizer.setObjective(costFunction);
+    ParabolicErrorFunctor functor(&data, this->nte);
+    Eigen::LevenbergMarquardt<ParabolicErrorFunctor> optimizer(functor);
+    optimizer.parameters.maxfev = 50; // Max iterations (function evaluations)
+    optimizer.parameters.xtol = 1e-4; // Step tolerance
+    optimizer.parameters.gtol = 1e-4; // Gradient tolerance
 
     double *imsr = imDataParams->images_r;
     double *imsi = imDataParams->images_i;
+
+    // Pre-allocate the other vectors from your old code
+    Eigen::VectorXd initialGuess(6);
 
     /* Loop over all pixels */
     for(int kx=0;kx<nx;kx++) {
@@ -252,21 +294,41 @@ void fwFit_ComplexLS_1r2star::fit_all(){
                 }
                 
                 // Set initial guess.
-                Eigen::VectorXd initialGuess(6);
-                initialGuess << initWr[kx + ky*nx], initWi[kx + ky*nx], initFr[kx + ky*nx], initFi[kx + ky*nx], initR2[kx + ky*nx], initFieldmap[kx + ky*nx];
+                //Eigen::VectorXd initialGuess(6);
+                //initialGuess << initWr[kx + ky*nx], initWi[kx + ky*nx], initFr[kx + ky*nx], initFi[kx + ky*nx], initR2[kx + ky*nx], initFieldmap[kx + ky*nx];
+                initialGuess(0) = initWr[kx + ky * nx];
+                initialGuess(1) = initWi[kx + ky * nx];
+                initialGuess(2) = initFr[kx + ky * nx];
+                initialGuess(3) = initFi[kx + ky * nx];
+                initialGuess(4) = initR2[kx + ky * nx];
+                initialGuess(5) = initFieldmap[kx + ky * nx];
 
-                // Start the optimization.
-                auto result = optimizer.minimize(initialGuess);
                 
-                outWr[kx + ky*nx] = result.xval(0); 
-                outWi[kx + ky*nx] = result.xval(1);
-                outFr[kx + ky*nx] = result.xval(2); 
-                outFi[kx + ky*nx] = result.xval(3);
-                outR2[kx + ky*nx] = result.xval(4); 
-                outFieldmap[kx + ky*nx] = result.xval(5); 
+                // Start the optimization.
+                optimizer.minimize(initialGuess);
+
+                Eigen::VectorXd fitted_vector(nte*2);
+                fitted_line(initialGuess, fitted_vector);
+                
+                for(int kt=0;kt<nte;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = fitted_vector[kt];
+                    fitSi[kx + ky*nx + kt*nx*ny] = fitted_vector[kt+nte];
+                }
+
+                outWr[kx + ky*nx] = initialGuess(0); 
+                outWi[kx + ky*nx] = initialGuess(1);
+                outFr[kx + ky*nx] = initialGuess(2); 
+                outFi[kx + ky*nx] = initialGuess(3);
+                outR2[kx + ky*nx] = initialGuess(4); 
+                outFieldmap[kx + ky*nx] = initialGuess(5);
+                
                         
             }
             else{
+                for(int kt=0;kt<nte;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = 0.0;
+                    fitSi[kx + ky*nx + kt*nx*ny] = 0.0;
+                }
                 outWr[kx + ky*nx] = initWr[kx + ky*nx];
                 outWi[kx + ky*nx] = initWi[kx + ky*nx];
                 outFr[kx + ky*nx] = initFr[kx + ky*nx];

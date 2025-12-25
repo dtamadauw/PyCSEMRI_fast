@@ -13,10 +13,11 @@
 #include <iostream>
 #include <iomanip>
 #include <functional>
+#include "lsqcpp_workspace.hpp"
 
 namespace lsqcpp
 {
-    using Index = Eigen::MatrixXd::Index;
+    //using Index = Eigen::MatrixXd::Index;
 
     /// Parametrization container for jacobian estimation using finite differences.
     /// This class holds parameters for the finite differences operation, such as the
@@ -1330,6 +1331,78 @@ namespace lsqcpp
         Scalar _lambda = Scalar{1};
     };
 
+
+    /// Step refinement method which implements the Levenberg Marquardt method.
+    template<typename _Scalar, typename _Solver=DenseSVDSolver>
+    class LevenbergMarquardtMethod_WS
+    {
+    public:
+        using Scalar = _Scalar;
+        using Solver = _Solver;
+        using Parameter = LevenbergMarquardtParameter<Scalar>;
+
+        LevenbergMarquardtMethod_WS(const Parameter &param)
+            : _param(param), _lambda(param.initialLambda())
+        { }
+
+        /// Computes the newton step from a linearized approximation of the objective function.
+        /// @param gradient gradient of the objective function
+        /// @param step computed newton step
+        /// @return true on success, otherwise false
+template<typename I, typename O, typename J, typename G, typename Objective, typename S, typename Workspace>
+        bool operator()(const Eigen::MatrixBase<I> &xval,
+                        const Eigen::MatrixBase<O> &fval,
+                        const Eigen::MatrixBase<J> &jacobian,
+                        const Eigen::MatrixBase<G> &gradient,
+                        const Objective &objective,
+                        Eigen::MatrixBase<S>& step,
+                        Workspace &work) // <-- FIX: Added 7th argument
+        {
+            // REMOVED internal type definitions, they are in the workspace
+            // REMOVED all internal matrix allocations (A, xvalN, fvalN, etc.)
+
+            const auto error = fval.squaredNorm() / 2;
+            
+            // USE workspace matrices
+            work.jacobianSq = jacobian.transpose() * jacobian;
+
+            Scalar errorN = error + 1;
+            Solver solver;
+
+            Index iterations = 0;
+            while((_param.maximumIterations() <= 0 || iterations < _param.maximumIterations()) &&
+                errorN > error)
+            {
+                work.A = work.jacobianSq; // USE workspace matrix
+                // add identity matrix
+                for(Index i = 0; i < work.A.rows(); ++i)
+                    work.A(i, i) += _lambda;
+
+                const auto ret = solver(work.A, gradient, step);
+                if(!ret)
+                    return false;
+
+                work.temp_xval = xval - step; // USE workspace matrix
+                objective(work.temp_xval, work.temp_fval, work.temp_jacobian); // USE workspace matrices
+                errorN = work.temp_fval.squaredNorm() / 2;
+
+                if(errorN > error)
+                    _lambda *= _param.increase();
+                else
+                    _lambda *= _param.decrease();
+
+                ++iterations;
+            }
+
+            return true;
+        }
+
+    private:
+        Parameter _param = {};
+        Scalar _lambda = Scalar{1};
+    };
+
+
     namespace internal
     {
         template<bool ComputesJacobian>
@@ -1657,6 +1730,107 @@ namespace lsqcpp
             return result;
         }
 
+         /// Minimizes the configured objective starting at the given initial guess.
+        Result minimize(const InputVector &initialGuess,
+                LsqWorkspace<Scalar, Inputs, Outputs> &work)
+        {
+            work.xval = initialGuess;
+            //OutputVector fval;
+            //JacobiMatrix jacobian;
+            //GradientVector gradient;
+            work.step = StepVector::Zero(work.xval.size()); // Use work.step
+
+            auto gradLen = _minGradLen + 1;
+            auto error = _minError + 1;
+            auto stepLen = _minStepLen + 1;
+            bool callbackResult = true;
+            bool succeeded = true;
+
+            // create objective lambda function which performs automatically numerical estimation
+            // of the gradient if necessary.
+            const auto objective = [this](const InputVector &xval, OutputVector &fval, JacobiMatrix &jacobian)
+            {
+                const auto evaluator = internal::ObjectiveEvaluator<Objective::ComputesJacobian>();
+                evaluator(xval, this->_objective, FiniteDifferencesMethod(), this->_finiteDifferencesParam, fval, jacobian);
+            };
+
+            auto stepMethod = StepMethod(_methodParam);
+            auto stepRefiner = StepRefiner(_refinerParam);
+
+            Index iterations = 0;
+            while((_maxIt <= 0 || iterations < _maxIt) &&
+                   gradLen >= _minGradLen &&
+                   stepLen >= _minStepLen &&
+                   error >= _minError &&
+                   callbackResult)
+            {
+                work.xval -= work.step; // Use work.xval and work.step
+                objective(work.xval, work.fval, work.jacobian); // Use work. members
+
+                error = work.fval.squaredNorm() / 2;
+                work.gradient = work.jacobian.transpose() * work.fval; // Use work. members
+                gradLen = work.gradient.norm();
+
+                if(!stepMethod(work.xval, work.fval, work.jacobian, work.gradient,
+                           objective, work.step, work)) // Pass `work` as new last arg
+                {
+                    succeeded = false;
+                    break;
+                }
+
+                // refine the step according to the current refiner
+                stepRefiner(work.xval, work.fval, work.jacobian, work.gradient,
+                            objective, work.step);
+                stepLen = work.step.norm();
+
+                // evaluate callback if available
+                if(_callback)
+                {
+                    callbackResult = _callback(iterations + 1, work.xval, work.fval, work.jacobian, work.gradient, work.step);
+                }
+
+                if(_verbosity > 0)
+                {
+                    using internal::makePrettyVector;
+
+                    std::stringstream ss;
+                    ss << "it=" << std::setfill('0')
+                        << std::setw(4) << iterations
+                        << std::fixed << std::showpoint << std::setprecision(6)
+                        << "    steplen=" << stepLen
+                        << "    gradlen=" << gradLen;
+
+                    if(_verbosity > 1)
+                        ss << "    callback=" << (callbackResult ? "true" : "false");
+
+                    ss << "    error=" << error;
+
+                    if(_verbosity > 2)
+                        ss << "    xval=" << makePrettyVector(work.xval);
+                    if(_verbosity > 3)
+                        ss << "    step=" << makePrettyVector(work.step);
+                    if(_verbosity > 4)
+                        ss << "    fval=" << makePrettyVector(work.fval);
+                    (*_output) << ss.str() << std::endl;
+                }
+
+                ++iterations;
+            }
+
+            Result result;
+            result.xval = work.xval;
+            result.fval = work.fval;
+            /*
+            result.error = error;
+            result.iterations = iterations;
+            result.succeeded = succeeded;
+            result.converged = stepLen < _minStepLen ||
+                gradLen < _minGradLen ||
+                error < _minError;
+            */
+            return result;
+        }       
+
     private:
         Objective _objective = {};
         Callback _callback = {};
@@ -1744,12 +1918,38 @@ namespace lsqcpp
                                               LevenbergMarquardtMethod<Scalar, Solver>,
                                               ConstantStepFactor,
                                               FiniteDifferencesMethod>;
+                                            
+    template<typename Scalar,
+             int Inputs,
+             int Outputs,
+             typename Objective,
+             typename Solver=DenseSVDSolver,
+             typename FiniteDifferencesMethod=CentralDifferences>                              
+    using LevenbergMarquardt_WS = LeastSquaresAlgorithm<Scalar,
+                                              Inputs,
+                                              Outputs,
+                                              Objective,
+                                              LevenbergMarquardtMethod_WS<Scalar, Solver>,
+                                              ConstantStepFactor,
+                                              FiniteDifferencesMethod>;
 
     template<typename Scalar,
              typename Objective,
              typename Solver=DenseSVDSolver,
              typename FiniteDifferencesMethod=CentralDifferences>
     using LevenbergMarquardtX = LevenbergMarquardt<Scalar,
+                                     Eigen::Dynamic,
+                                     Eigen::Dynamic,
+                                     Objective,
+                                     Solver,
+                                     FiniteDifferencesMethod>;
+
+
+    template<typename Scalar,
+             typename Objective,
+             typename Solver=DenseSVDSolver,
+             typename FiniteDifferencesMethod=CentralDifferences>                           
+    using LevenbergMarquardtX_WS = LevenbergMarquardt_WS<Scalar,
                                      Eigen::Dynamic,
                                      Eigen::Dynamic,
                                      Objective,

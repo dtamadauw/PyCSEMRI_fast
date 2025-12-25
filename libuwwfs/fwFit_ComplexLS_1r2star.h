@@ -4,8 +4,7 @@
 #include <time.h>
 #include <algorithm>
 #include "param_str.h"
-#include "lsqcpp.hpp"
-
+#include <unsupported/Eigen/NonLinearOptimization>
 
 
 #define PI 3.14159265
@@ -19,7 +18,6 @@
 class fwFit_ComplexLS_1r2star{
 
     private:
-    int nte;
     int nf;
     double *cursr;
     double *cursi;
@@ -44,8 +42,11 @@ class fwFit_ComplexLS_1r2star{
 
 
     public:
+    int nte;
     int nx;
     int ny;
+    double *fitSr;
+    double *fitSi;    
     double *outR2;
     double *outFieldmap;
     double *outWr;
@@ -63,8 +64,8 @@ class fwFit_ComplexLS_1r2star{
         delete[] sfi;
         delete[] swr;
         delete[] swi;
-        //delete[] fre;
-        //delete[] fim;
+        delete[] fitSr;
+        delete[] fitSi;
         delete[] fF;
         delete[] outR2;
         delete[] outFieldmap;
@@ -74,6 +75,7 @@ class fwFit_ComplexLS_1r2star{
         delete[] outFi;
     }
 
+    void fitted_line(const Eigen::VectorXd &xval, Eigen::VectorXd &fval);
 
     void initialize_te(imDataParams_str *imDataParams_in, algoParams_str *algoParams_in, initParams_str *initParams_in);
     void fit_all();

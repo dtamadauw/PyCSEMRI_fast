@@ -1,18 +1,12 @@
 import ctypes
 import numpy as np
-import sys
-from importlib import resources
+
 
 # Load the shared library into ctypes
-lib_name = None
-if sys.platform.startswith('win'):
-	lib_name = 'libuwwfs.dll'
-elif sys.platform.startswith('linux'):
-	lib_name = 'libuwwfs.so'
-elif sys.platform.startswith('darwin'): # macOS
-	lib_name = 'libuwwfs.dylib'
-with resources.path('pycsemri', lib_name) as lib_path:
-	libuwwfs = ctypes.CDLL(str(lib_path))
+libuwwfs = ctypes.CDLL("/home/dxt005/lib/libuwwfs.so")
+
+
+
 
 
 
@@ -49,7 +43,9 @@ class OutParams_str(ctypes.Structure):
                 ("wat_r_amp", ctypes.POINTER(ctypes.c_double)),
                 ("fat_r_amp", ctypes.POINTER(ctypes.c_double)),
 				("wat_i_amp", ctypes.POINTER(ctypes.c_double)),
-				("fat_i_amp", ctypes.POINTER(ctypes.c_double))]
+				("fat_i_amp", ctypes.POINTER(ctypes.c_double)),
+				("fit_r_amp", ctypes.POINTER(ctypes.c_double)),
+				("fit_i_amp", ctypes.POINTER(ctypes.c_double))]
     
 
 
@@ -99,7 +95,9 @@ def fwFit_MixedLS_1r2star(imDataParams, algoParams, initParams):
 	fat_i_amp = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
 	r2starmap = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
 	fm = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
-	
+	fit_r_amp = np.zeros(img_dim[0]*img_dim[1]*nte, dtype=np.float64)
+	fit_i_amp = np.zeros(img_dim[0]*img_dim[1]*nte, dtype=np.float64)
+
 
 	#Allocate Memories
 	imDataParams_c = ImDataParams_str((ctypes.c_double * len(TE))(*TE), 
@@ -129,7 +127,9 @@ def fwFit_MixedLS_1r2star(imDataParams, algoParams, initParams):
 							wat_r_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
 							fat_r_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
 							wat_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-							fat_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
+							fat_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							fit_r_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							fit_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
 
 	
 	libuwwfs.fwFit_MixedLS_1r2star_c.argtypes = [ctypes.POINTER(ImDataParams_str), ctypes.POINTER(AlgoParams_str), ctypes.POINTER(InitParams_str), ctypes.POINTER(OutParams_str)]
@@ -140,7 +140,8 @@ def fwFit_MixedLS_1r2star(imDataParams, algoParams, initParams):
         'water_amp': np.transpose(np.reshape(wat_r_amp + 1j*wat_i_amp, (im_dim[1],im_dim[0]))),
 		'fat_amp':  np.transpose(np.reshape(fat_r_amp + 1j*fat_i_amp, (im_dim[1],im_dim[0]))),
         'r2starmap':  np.transpose(np.reshape(r2starmap, (im_dim[1],im_dim[0]))),
-        'fm':  np.transpose(np.reshape(fm, (im_dim[1],im_dim[0])))
+        'fm':  np.transpose(np.reshape(fm, (im_dim[1],im_dim[0]))),
+        'fit_amp': np.transpose(np.reshape(fit_r_amp + 1j*fit_i_amp, (nte,im_dim[1],im_dim[0])), (2,1,0))
 	}
 
 	return outParams

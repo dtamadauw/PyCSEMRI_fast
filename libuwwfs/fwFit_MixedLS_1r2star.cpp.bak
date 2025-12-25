@@ -1,0 +1,426 @@
+#include "fwFit_MixedLS_1r2star.h"
+
+double complexPhase(double x, double y) {
+  double curPhi = 0.0; 
+
+
+  if(x>0) {
+    curPhi = atan(y/x);
+  } else if(x<0) {
+    if(y>=0) {
+      curPhi = atan(y/x) + PI;
+    } else {
+      curPhi = atan(y/x) - PI;
+    }
+    
+  } else if(x==0) {
+    
+    if(y>=0) {
+      curPhi = PI/2;
+    } else {
+      curPhi = -PI/2;
+    }
+    
+  }
+
+
+  return curPhi;
+}
+
+
+// fitted_line function is no longer needed by the optimizer,
+// but we can use its logic to get the final fitted signal
+void fwFit_MixedLS_1r2star::get_fitted_line(const Eigen::VectorXd &xval, Eigen::VectorXd &fval)
+{
+    // xval has 5 parameters: [W, F, phi, r2, fieldmap]
+    double shat, shatr, shati, CS, SN, EXP;
+
+    double W = xval(0);
+    double F = xval(1);
+    double phi = xval(2);
+    double r2 = xval(3);
+    double fieldmap = xval(4);
+
+    fval.resize(2*nte-NUM_MAGN);
+    // Part 1: Magnitude
+    for(int kt = 0; kt < NUM_MAGN; ++kt)
+    {
+        EXP = exp(-te[kt]*r2);
+        shat = EXP*std::sqrt((W*swr[kt] + F*sfr[kt])*(W*swr[kt] + F*sfr[kt]) + (W*swi[kt] + F*sfi[kt])*(W*swi[kt] + F*sfi[kt]));
+        fval(kt) = shat;
+    }  
+    // Part 2: Complex
+    for(int kt = NUM_MAGN; kt < nte; ++kt)
+    {
+        CS = std::cos(phi + 2*M_PI*fieldmap*te[kt]);
+        SN = std::sin(phi + 2*M_PI*fieldmap*te[kt]);
+        EXP = exp(-te[kt]*r2);
+
+        shatr = CS*EXP*(W*swr[kt] + F*sfr[kt]) - SN*EXP*(W*swi[kt] + F*sfi[kt]);
+        shati = SN*EXP*(W*swr[kt] + F*sfr[kt]) + CS*EXP*(W*swi[kt] + F*sfi[kt]);
+
+        fval(kt) = shatr;
+        fval(kt+nte-NUM_MAGN) = shati;
+    }  
+}
+
+
+struct MixedFitFunctor
+{
+    // --- Required by Eigen::LevenbergMarquardt ---
+    enum {
+        InputsAtCompileTime = Eigen::Dynamic, // Non-linear params (p=5)
+        ValuesAtCompileTime = Eigen::Dynamic  // Residuals (n=2*nte-1)
+    };
+
+    // --- Member Data ---
+    data_str *data;
+    int m_inputs;            // Number of non-linear parameters (p)
+    int m_values;            // Number of residuals (n)
+
+    // --- Constructor ---
+    MixedFitFunctor(data_str *d, int nte, int num_magn) : data(d) 
+    {
+        m_inputs = 5;       // p = 5 (W, F, phi, r2, fieldmap)
+        m_values = 2 * nte - num_magn; // n = 1 (mag) + 2*(nte-1) (cplx) = 2*nte - 1
+    }
+
+    // --- Required: Get dimensions ---
+    int inputs() const { return m_inputs; }
+    int values() const { return m_values; }
+
+    /**
+     * @brief Required Function 1: Computes the residual vector f(x).
+     */
+    int operator()(const Eigen::VectorXd &xval, Eigen::VectorXd &fval) const
+    {
+        double shat, shatr, shati, CS, SN, EXP;
+
+        int nte = data->nte;
+        double *cursr = data->cursr;
+        double *cursi = data->cursi;
+        double *te = data->te;
+        double *swr = data->swr;
+        double *swi = data->swi;
+        double *sfr = data->sfr;
+        double *sfi = data->sfi;
+        int NUM_MAGN = data->NUM_MAGN;
+
+        double W = xval(0);
+        double F = xval(1);
+        double phi = xval(2);
+        double r2 = xval(3);
+        double fieldmap = xval(4);
+
+        // fval.resize(m_values); // Not needed, Eigen LM pre-allocates
+
+        // Part 1: Magnitude residual(s)
+        for(int kt = 0; kt < NUM_MAGN; ++kt)
+        {
+            EXP = exp(-te[kt]*r2);
+            shat = EXP*std::sqrt((W*swr[kt] + F*sfr[kt])*(W*swr[kt] + F*sfr[kt]) + (W*swi[kt] + F*sfi[kt])*(W*swi[kt] + F*sfi[kt]));
+            fval(kt) = shat - std::sqrt(cursr[kt]*cursr[kt] + cursi[kt]*cursi[kt]);
+        }  
+        
+        // Part 2: Complex residuals
+        for(int kt = NUM_MAGN; kt < nte; ++kt)
+        {
+            CS = std::cos(phi + 2*M_PI*fieldmap*te[kt]);
+            SN = std::sin(phi + 2*M_PI*fieldmap*te[kt]);
+            EXP = exp(-te[kt]*r2);
+
+            shatr = CS*EXP*(W*swr[kt] + F*sfr[kt]) - SN*EXP*(W*swi[kt] + F*sfi[kt]);
+            shati = SN*EXP*(W*swr[kt] + F*sfr[kt]) + CS*EXP*(W*swi[kt] + F*sfi[kt]);
+
+            fval(kt) = shatr - cursr[kt];
+            fval(kt+nte-NUM_MAGN) = shati; // Real parts are [NUM_MAGN...nte-1], complex start at [nte]
+        }  
+        return 0; // Success
+    }
+
+    /**
+     * @brief Required Function 2: Computes the Jacobian J(x).
+     */
+    int df(const Eigen::VectorXd &xval, Eigen::MatrixXd &jacobian) const
+    {
+        double shat, shatr, shati, CS, SN, EXP;
+        double curJ1,curJ2,curJ3;
+        double curJ4,curJ5; // Removed curJ6
+        double expr2, sinfm, cosfm;
+
+        int nte = data->nte;
+        double *te = data->te;
+        double *swr = data->swr;
+        double *swi = data->swi;
+        double *sfr = data->sfr;
+        double *sfi = data->sfi;
+        int NUM_MAGN = data->NUM_MAGN;
+
+        double W = xval(0);
+        double F = xval(1);
+        double phi = xval(2);
+        double r2 = xval(3);
+        double fieldmap = xval(4);
+
+        // jacobian.setZero(m_values, m_inputs); // Not needed, Eigen LM pre-allocates
+
+        // --- START: MODIFIED SECTION ---
+        // Part 1: Jacobian for Magnitude residual(s)
+        // REVERTED to match the *original* lsqcpp implementation exactly,
+        // as this version is validated against ground truth.
+        for(int kt = 0; kt < NUM_MAGN; ++kt)
+        {
+            EXP = exp(-te[kt]*r2);
+
+            // This is the model from the original code
+            shat = std::sqrt((W*swr[kt] + F*sfr[kt])*(W*swr[kt] + F*sfr[kt]) + (W*swi[kt] + F*sfi[kt])*(W*swi[kt] + F*sfi[kt])) + 1e-12;
+
+            // d/dW (Original implementation)
+            curJ1 = EXP*(W*swr[kt] + F*sfr[kt])/shat;
+            jacobian(kt,0) = curJ1;
+
+            // d/dF (Original implementation)
+            curJ2 = EXP*(F*(sfr[kt]*sfr[kt] + sfi[kt]*sfi[kt]) + W*sfr[kt])/shat;
+            jacobian(kt,1) = curJ2;
+            
+            // d/dPhi (Original implementation)
+            jacobian(kt,2) = 0.0;
+
+            // d/dr2 (Original implementation)
+            // Note: This term looks unusual, but we must match it.
+            curJ4 = EXP*(-W*W*te[kt] - W*F*sfr[kt]*te[kt] -F*F*te[kt]*(sfr[kt]*sfr[kt] + sfi[kt]*sfi[kt]) - W*F*sfr[kt]*te[kt])/shat;
+            jacobian(kt,3) = curJ4;
+
+            // d/dfieldmap (Original implementation)
+            jacobian(kt,4) = 0.0;
+        }
+        // --- END: MODIFIED SECTION ---
+
+
+        // Part 2: Jacobian for Complex residuals
+        // (This part was a direct transcription and remains unchanged)
+        for(int kt = NUM_MAGN; kt < nte; ++kt)
+        {
+            expr2 = exp(-te[kt]*r2);
+            sinfm = std::sin(phi + 2*M_PI*fieldmap*te[kt]);
+            cosfm = std::cos(phi + 2*M_PI*fieldmap*te[kt]);
+
+            shatr=cosfm*expr2*(W*swr[kt] + F*sfr[kt]) - sinfm*expr2*(W*swi[kt] + F*sfi[kt]);
+            shati=sinfm*expr2*(W*swr[kt] + F*sfr[kt]) + cosfm*expr2*(W*swi[kt] + F*sfi[kt]);
+
+            // d(Real, Imag) / dW
+            curJ1 = cosfm*expr2*swr[kt] - sinfm*expr2*swi[kt];
+            jacobian(kt,0) = curJ1;
+            curJ1 = sinfm*expr2*swr[kt] + cosfm*expr2*swi[kt];
+            jacobian(kt+nte-NUM_MAGN,0) = curJ1;
+
+            // d(Real, Imag) / dF
+            curJ2 = cosfm*expr2*sfr[kt] - sinfm*expr2*sfi[kt];
+            jacobian(kt,1) = curJ2;
+            curJ2 = sinfm*expr2*sfr[kt] + cosfm*expr2*sfi[kt];
+            jacobian(kt+nte-NUM_MAGN,1) = curJ2;
+
+            // d(Real, Imag) / dPhi
+            curJ3 = -sinfm*expr2*(W*swr[kt] + F*sfr[kt]) - cosfm*expr2*(W*swi[kt] + F*sfi[kt]);
+            jacobian(kt,2) = curJ3;
+            curJ3 = cosfm*expr2*(W*swr[kt] + F*sfr[kt]) - sinfm*expr2*(W*swi[kt] + F*sfi[kt]);
+            jacobian(kt+nte-NUM_MAGN,2) = curJ3;
+
+            // d(Real, Imag) / dr2
+            curJ4 = -te[kt]*shatr;
+            jacobian(kt,3) = curJ4;
+            curJ4 = -te[kt]*shati;
+            jacobian(kt+nte-NUM_MAGN,3) = curJ4;
+            
+            // d(Real, Imag) / dfieldmap
+            curJ5 = 2*M_PI*te[kt]*(-sinfm*expr2*(W*swr[kt] + F*sfr[kt]) - cosfm*expr2*(W*swi[kt] + F*sfi[kt]));
+            jacobian(kt,4) = curJ5;
+            curJ5 =  2*M_PI*te[kt]*(cosfm*expr2*(W*swr[kt] + F*sfr[kt]) - sinfm*expr2*(W*swi[kt] + F*sfi[kt]));
+            jacobian(kt+nte-NUM_MAGN,4) = curJ5;
+        }
+        return 0; // Success
+    }
+};
+
+
+
+
+void fwFit_MixedLS_1r2star::initialize_te(imDataParams_str *imDataParams_in, algoParams_str *algoParams_in, initParams_str *initParams_in){
+    this->imDataParams = imDataParams_in;
+    this->algoParams = algoParams_in;
+    this->initParams = initParams_in;
+    this->nte = imDataParams->nte;
+    this->fieldStrength = imDataParams->FieldStrength;
+    this->clockwise = imDataParams->PrecessionIsClockwise;
+    this->nx = imDataParams->im_dim[0];
+    this->ny = imDataParams->im_dim[1];
+    this->nf = std::max(nx,ny);
+    this->NUM_MAGN = 1; // Hardcode as per original
+    cursr = new double[nte];
+    cursi = new double[nte];
+    sfr = new double[nte];
+    sfi = new double[nte];
+    swr = new double[nte];
+    swi = new double[nte];
+    te = new double[nte];
+    double waterAmp = algoParams->species_wat_amp[0];
+    double *relAmps = algoParams->species_fat_amp;
+    double *fPPM = algoParams->species_fat_freq;
+    nf = algoParams->NUM_FAT_PEAKS;
+    fF = new double[nf]; // <-- BUG FIX: Was malloc, now new[]
+    for(int kf=0;kf<nf;kf++) {
+        fF[kf] = fPPM[kf]*GYRO*fieldStrength;
+    }
+    initWr = initParams->water_r_init;
+    initFr = initParams->fat_r_init; 
+    initWi = initParams->water_i_init;
+    initFi = initParams->fat_i_init;
+    initR2 = initParams->r2s_init;
+    initFieldmap = initParams->fm_init;
+    masksignal = initParams->masksignal_init;
+    for(int kf=0;kf<nte;kf++){
+        te[kf] = imDataParams->TE[kf];
+    }
+    outR2 = new double[nx*ny];
+    outFieldmap =  new double[nx*ny];
+    outWr =  new double[nx*ny];
+    outWi =  new double[nx*ny];
+    outFr =  new double[nx*ny];
+    outFi =  new double[nx*ny];
+    // This memory was not allocated in your original file, adding it.
+    fitSr = new double[nx*ny*nte];
+    fitSi = new double[nx*ny*nte];
+    // fF = (double *)malloc(nf*sizeof(double)); // <-- This was the original BUG
+    // We already allocated fF with new[] above, so this second allocation is removed.
+    for(int kf=0;kf<nf;kf++) {
+        fF[kf] = fPPM[kf]*GYRO*fieldStrength;
+    }
+    for(int kt=0;kt<nte;kt++) {
+        swr[kt] = waterAmp;
+        swi[kt] = 0.0;
+        sfr[kt] = 0.0;
+        sfi[kt] = 0.0;
+        for(int kf=0;kf<nf;kf++) {
+            sfr[kt] = sfr[kt] + relAmps[kf]*cos(2*M_PI*te[kt]*fF[kf]);
+            sfi[kt] = sfi[kt] + relAmps[kf]*sin(2*M_PI*te[kt]*fF[kf]);
+        }    
+    }
+}
+
+
+
+void fwFit_MixedLS_1r2star::fit_all(){
+
+    printf("Start fitting\n");
+    data_str data;
+    data.nte = nte;
+    data.NUM_MAGN = this->NUM_MAGN;
+    data.cursr = cursr;
+    data.cursi = cursi;
+    data.te = te;
+    data.swr = swr;
+    data.swi = swi;
+    data.sfr = sfr;
+    data.sfi = sfi;
+
+
+
+    MixedFitFunctor functor(&data, this->nte, this->NUM_MAGN);
+    Eigen::LevenbergMarquardt<MixedFitFunctor> optimizer(functor);
+    optimizer.parameters.maxfev = 50; // Max function evaluations
+    optimizer.parameters.gtol = 1e-4; // Gradient tolerance
+    optimizer.parameters.xtol = 1e-4; // Step tolerance
+
+    Eigen::VectorXd initialGuess(5);
+    Eigen::VectorXd fitted_vector(2*nte - NUM_MAGN);
+
+    double *imsr = imDataParams->images_r;
+    double *imsi = imDataParams->images_i;
+
+    double curPhi, curAmpW, curAmpF;
+
+    printf("Start Looping\n");
+
+    /* Loop over all pixels */
+    for(int kx=0;kx<nx;kx++) {
+        for(int ky=0;ky<ny;ky++) {
+            int idx = kx + ky*nx;
+
+            if(masksignal[kx + ky*nx] > 0.1){
+
+                /* Get signal at current voxel */
+                if(clockwise>0) {
+                    for(int kt=0;kt<nte;kt++) {
+                        cursr[kt] = imsr[idx + kt*nx*ny];
+                        cursi[kt] = imsi[idx + kt*nx*ny];
+                    }
+                } else {
+                    for(int kt=0;kt<nte;kt++) {
+                        cursr[kt] = imsr[idx + kt*nx*ny];
+                        cursi[kt] = -imsi[idx + kt*nx*ny];
+                    }
+                }
+                
+                // Set initial guess (same logic as original)
+                curAmpW = std::sqrt(initWr[idx]*initWr[idx] + initWi[idx]*initWi[idx]);
+                curAmpF = std::sqrt(initFr[idx]*initFr[idx] + initFi[idx]*initFi[idx]);
+                curPhi = complexPhase(initWr[idx]+initFr[idx], initWi[idx]+initFi[idx]);
+
+                // Set initial guess.
+                initialGuess(0) = curAmpW;
+                initialGuess(1) = curAmpF;
+                initialGuess(2) = curPhi;
+                initialGuess(3) = initR2[idx];
+                initialGuess(4) = initFieldmap[idx];
+
+
+                // Start the optimization.
+                optimizer.minimize(initialGuess);
+                
+                curAmpW = initialGuess(0);
+                curAmpF = initialGuess(1);
+                curPhi = initialGuess(2);    
+                
+
+                get_fitted_line(initialGuess, fitted_vector);
+                
+
+                for(int kt=0;kt<NUM_MAGN;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = fitted_vector[kt];
+                    fitSi[kx + ky*nx + kt*nx*ny] = 0.0;   
+                }
+                for(int kt=NUM_MAGN;kt<nte;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = fitted_vector[kt];
+                    fitSi[kx + ky*nx + kt*nx*ny] = fitted_vector[kt+nte-NUM_MAGN];
+                }
+                outWr[kx + ky*nx] = curAmpW*cos(curPhi);
+                outWi[kx + ky*nx] = curAmpW*sin(curPhi);
+                outFr[kx + ky*nx] = curAmpF*cos(curPhi);
+                outFi[kx + ky*nx] = curAmpF*sin(curPhi);
+                outR2[idx] = initialGuess(3); 
+                outFieldmap[idx] = initialGuess(4); 
+                
+                
+            }
+            else{
+                for(int kt=0;kt<NUM_MAGN;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = 0.0;
+                    fitSi[kx + ky*nx + kt*nx*ny] = 0.0;   
+                }
+                for(int kt=NUM_MAGN;kt<nte;kt++) {
+                    fitSr[kx + ky*nx + kt*nx*ny] = 0.0;
+                    fitSi[kx + ky*nx + kt*nx*ny] = 0.0;
+                }
+                outWr[kx + ky*nx] = initWr[kx + ky*nx];
+                outWi[kx + ky*nx] = initWi[kx + ky*nx];
+                outFr[kx + ky*nx] = initFr[kx + ky*nx];
+                outFi[kx + ky*nx] = initFi[kx + ky*nx];
+                outR2[kx + ky*nx] = initR2[kx + ky*nx]; 
+                outFieldmap[kx + ky*nx] = 0; 
+            }
+     
+        }
+    }
+
+
+}
