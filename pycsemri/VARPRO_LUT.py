@@ -1,0 +1,143 @@
+import ctypes
+import numpy as np
+import sys
+from importlib import resources
+
+# Load the shared library into ctypes
+lib_name = None
+if sys.platform.startswith('win'):
+	lib_name = 'libuwwfs.dll'
+elif sys.platform.startswith('linux'):
+	lib_name = 'libuwwfs.so'
+elif sys.platform.startswith('darwin'): # macOS
+	lib_name = 'libuwwfs.dylib'
+with resources.path('pycsemri', lib_name) as lib_path:
+	libuwwfs = ctypes.CDLL(str(lib_path))
+
+
+
+class ImDataParams_str(ctypes.Structure):
+    _fields_ = [("TE", ctypes.c_double * 32),
+                ("nte", ctypes.c_int),
+                ("FieldStrength", ctypes.c_double),
+                ("PrecessionIsClockwise", ctypes.c_double),
+                ("images_r", ctypes.POINTER(ctypes.c_double)),
+                ("images_i", ctypes.POINTER(ctypes.c_double)),
+                ("im_dim", ctypes.c_int * 2)]
+
+class AlgoParams_str(ctypes.Structure):
+    _fields_ = [("species_wat_amp", ctypes.c_double * 32),
+                ("species_wat_freq", ctypes.c_double * 32),
+                ("species_fat_amp", ctypes.c_double * 32),
+                ("species_fat_freq", ctypes.c_double * 32),
+                ("NUM_WAT_PEAKS", ctypes.c_int),
+                ("NUM_FAT_PEAKS", ctypes.c_int),
+				("range_fm", ctypes.c_double * 2),
+                ("NUM_FMS", ctypes.c_int),
+				("range_r2star", ctypes.c_double * 2),
+				("NUM_R2STARS", ctypes.c_int),
+				("mu", ctypes.c_double),
+				("mask_threshold", ctypes.c_double),
+                ("SUBSAMPLE", ctypes.c_int)
+                ]
+class OutInitParams_str(ctypes.Structure):
+    _fields_ = [("r2s_init", ctypes.POINTER(ctypes.c_double)),
+                ("fm_init", ctypes.POINTER(ctypes.c_double)),
+				("masksignal_init", ctypes.POINTER(ctypes.c_double)),
+                ("wat_r_amp", ctypes.POINTER(ctypes.c_double)),
+                ("fat_r_amp", ctypes.POINTER(ctypes.c_double)),
+				("wat_i_amp", ctypes.POINTER(ctypes.c_double)),
+				("fat_i_amp", ctypes.POINTER(ctypes.c_double))
+				]
+    
+
+def VARPRO_LUT(imDataParams, algoParams):
+
+	nte = len(imDataParams['TE'])
+	TE = np.zeros(32, dtype=np.float64)
+	FieldStrength = imDataParams['FieldStrength']
+	TE[0:nte] = imDataParams['TE']
+	PrecessionIsClockwise = imDataParams['PrecessionIsClockwise']
+	img_dim = imDataParams['images'].shape
+	#images_r = np.zeros(img_dim[0]*img_dim[1])
+	#images_i = np.zeros(img_dim[0]*img_dim[1])
+	images_r = np.real(imDataParams['images']).flatten(order='F').astype(np.float64)
+	images_i = np.imag(imDataParams['images']).flatten(order='F').astype(np.float64)
+	im_dim = np.zeros(2).astype(np.int32)
+	im_dim[0] = img_dim[0]
+	im_dim[1] = img_dim[1]
+     
+
+	#For algoParams_c
+	NUM_WAT_PEAKS = 1
+	NUM_FAT_PEAKS = len(algoParams['species'][1]['frequency'])
+	species_wat_amp = np.zeros(32, dtype=np.float64)
+	species_fat_amp = np.zeros(32, dtype=np.float64)
+	species_wat_freq = np.zeros(32, dtype=np.float64)
+	species_fat_freq = np.zeros(32, dtype=np.float64)
+	species_wat_amp[0:NUM_WAT_PEAKS] = algoParams['species'][0]['relAmps']
+	species_fat_amp[0:NUM_FAT_PEAKS] = algoParams['species'][1]['relAmps']
+	species_wat_freq[0:NUM_WAT_PEAKS] =  algoParams['species'][0]['frequency']
+	species_fat_freq[0:NUM_FAT_PEAKS] =  algoParams['species'][1]['frequency']
+	NUM_FMS = algoParams['NUM_FMS']
+	range_fm = np.zeros(2, dtype=np.float64)
+	range_fm = algoParams['range_fm']
+	range_r2star = np.zeros(2, dtype=np.float64)
+	range_r2star = algoParams['range_r2star']
+	NUM_R2STARS = algoParams['NUM_R2STARS']
+	mu = 0.06
+	mask_threshold = 0.05
+	SUBSAMPLE = algoParams['SUBSAMPLE']
+
+	#For outParams
+	wat_r_amp = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	wat_i_amp = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	fat_r_amp = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	fat_i_amp = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	r2s_init = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	fm_init = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+	masksignal_init = np.zeros(img_dim[0]*img_dim[1], dtype=np.float64)
+
+
+
+	#Allocate Memories
+	imDataParams_c = ImDataParams_str((ctypes.c_double * len(TE))(*TE), 
+								nte, 
+								FieldStrength, 
+								PrecessionIsClockwise, 
+								images_r.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), 
+								images_i.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), 
+								(ctypes.c_int * len(im_dim))(*im_dim))
+	algoParams_c = AlgoParams_str((ctypes.c_double * 32)(*species_wat_amp),
+								(ctypes.c_double * 32)(*species_wat_freq),
+								(ctypes.c_double * 32)(*species_fat_amp),
+								(ctypes.c_double * 32)(*species_fat_freq),
+								NUM_WAT_PEAKS, NUM_FAT_PEAKS, 
+								(ctypes.c_double * 2)(*range_fm),
+                                NUM_FMS,
+								(ctypes.c_double * 2)(*range_r2star),
+                                NUM_R2STARS, mu, mask_threshold, SUBSAMPLE
+                                )
+    
+	outParams_c = OutInitParams_str(r2s_init.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),  
+							fm_init.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), 
+							masksignal_init.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							wat_r_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							fat_r_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							wat_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+							fat_i_amp.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+							)
+
+	
+	libuwwfs.VARPRO_LUT_c.argtypes = [ctypes.POINTER(ImDataParams_str), ctypes.POINTER(AlgoParams_str), ctypes.POINTER(OutInitParams_str)]
+	libuwwfs.VARPRO_LUT_c.restype = None
+	libuwwfs.VARPRO_LUT_c(ctypes.byref(imDataParams_c), ctypes.byref(algoParams_c), ctypes.byref(outParams_c))
+	
+	outParams = {
+        'water_amp': np.transpose(np.reshape(wat_r_amp + 1j*wat_i_amp, (im_dim[1],im_dim[0]))),
+		'fat_amp':  np.transpose(np.reshape(fat_r_amp + 1j*fat_i_amp, (im_dim[1],im_dim[0]))),
+        'r2s_init':  np.transpose(np.reshape(r2s_init, (im_dim[1],im_dim[0]))),
+        'fm':  np.transpose(np.reshape(fm_init, (im_dim[1],im_dim[0])))
+	}
+
+	return outParams

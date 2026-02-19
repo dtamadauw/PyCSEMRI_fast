@@ -7,6 +7,7 @@ from pycsemri.decomposeGivenFieldMapAndDampings import decomposeGivenFieldMapAnd
 from pycsemri.computeFF import computeFF
 from pycsemri.create_robust_mask import create_robust_mask
 from pycsemri.fwFit_ComplexLS_1r2star import fwFit_ComplexLS_1r2star
+from pycsemri.fwFit_VarproLS_1r2star import fwFit_VarproLS_1r2star
 from pycsemri.calculate_snr_from_fit import calculate_snr_from_fit
 from pycsemri.estimate_snr_threshold import estimate_snr_threshold
 from pycsemri.confidenceMap import generate_confidence_map_dicoms
@@ -105,7 +106,8 @@ for sl in range(1,ims.shape[3]):
     mask = create_robust_mask(np.abs(ims[:,:,0,sl]), percentile_low=0, percentile_high=50)
     initParams['masksignal'] = mask
 
-    outParams = fwFit_ComplexLS_1r2star(imDataParams, algoParams, initParams)
+    #outParams = fwFit_ComplexLS_1r2star(imDataParams, algoParams, initParams)
+    outParams = fwFit_VarproLS_1r2star(imDataParams, algoParams, initParams)
 
     R2s3D[:,:,sl] = outParams['r2starmap']
     PDFF3D[:,:,sl] = computeFF( outParams )
