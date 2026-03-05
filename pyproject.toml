@@ -17,7 +17,17 @@ build-backend = "setuptools.build_meta"
 [tool.cibuildwheel]
 # Expanded build matrix: builds for Python 3.6 and modern versions 3.8-3.12
 build = "cp36-* cp38-* cp39-* cp310-* cp311-* cp312-*"
-skip = "pp*"
+skip = [
+    "pp*",
+    "*-manylinux_i686",
+    "*-musllinux_i686",
+    "*-win32",
+    "cp36-macosx_arm64",
+    "cp38-macosx_arm64"
+]
+
+# Show C++ compiler output in GitHub Actions logs if a build fails
+build-verbosity = 1
 
 # General command to run before all builds
 before-build = "python -m pip install --upgrade pip cmake"
