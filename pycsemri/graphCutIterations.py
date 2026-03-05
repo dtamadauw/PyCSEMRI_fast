@@ -1,8 +1,15 @@
 import ctypes
 import numpy as np
 import sys
-from importlib import resources
-
+try:
+    # Python 3.7+ standard library
+    from importlib import resources
+    # Check for the modern 'files' API introduced in 3.9
+    has_modern_resources = hasattr(resources, 'files')
+except ImportError:
+    # Backport for Python 3.6
+    import importlib_resources as resources
+    has_modern_resources = hasattr(resources, 'files')
 
 
 def graphCutIterations(imDataParams, algoParams, residual, lmap, cur_ind):
@@ -19,6 +26,7 @@ def graphCutIterations(imDataParams, algoParams, residual, lmap, cur_ind):
 
     CPP_OUTPUT_DIR = './'
 
+
     # Load the shared library into ctypes
     lib_name = None
     if sys.platform.startswith('win'):
@@ -27,8 +35,18 @@ def graphCutIterations(imDataParams, algoParams, residual, lmap, cur_ind):
         lib_name = 'libgraphCutIterations.so'
     elif sys.platform.startswith('darwin'): # macOS
         lib_name = 'libgraphCutIterations.dylib'
-    with resources.path('pycsemri', lib_name) as lib_path:
-        lib = ctypes.CDLL(str(lib_path))
+
+    # Robust library loading across Python versions
+    if has_modern_resources:
+        # Recommended approach for Python 3.9 - 3.12+
+        lib_path = resources.files('pycsemri').joinpath(lib_name)
+        with resources.as_file(lib_path) as path:
+            lib = ctypes.CDLL(str(path))
+    else:
+        # Fallback for Python 3.6 - 3.8
+        # resources.path is deprecated in newer versions but works in older ones
+        with resources.path('pycsemri', lib_name) as path:
+            lib = ctypes.CDLL(str(path))
 
 
     lib.graphCutIterations_c_wrapper.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, np.ctypeslib.ndpointer(dtype=np.complex128, flags='C_CONTIGUOUS'), np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), ctypes.c_double, np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), ctypes.c_int, ctypes.c_double, np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), ctypes.c_int, ctypes.c_int, ctypes.c_int, np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS'), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_bool)), ctypes.c_char_p]

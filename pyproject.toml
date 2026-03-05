@@ -8,7 +8,10 @@ requires = [
     "wheel",
     "scikit-build",
     "cmake>=3.15",
-    "numpy"
+    "numpy",
+    "scipy",
+    "importlib-resources",
+    "pydicom"
 ]
 build-backend = "setuptools.build_meta"
 

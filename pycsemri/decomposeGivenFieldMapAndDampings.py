@@ -1,11 +1,22 @@
 import ctypes
 import numpy as np
 import sys
-from importlib import resources
+
+try:
+    # Python 3.7+ standard library
+    from importlib import resources
+    # Check for the modern 'files' API introduced in 3.9
+    has_modern_resources = hasattr(resources, 'files')
+except ImportError:
+    # Backport for Python 3.6
+    import importlib_resources as resources
+    has_modern_resources = hasattr(resources, 'files')
 
 
 def decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fieldmap,r2starWater,r2starFat ):
 
+
+    # Load the shared library into ctypes
     lib_name = None
     if sys.platform.startswith('win'):
         lib_name = 'libdecomposeGivenFieldMapAndDampings.dll'
@@ -13,8 +24,19 @@ def decomposeGivenFieldMapAndDampings( imDataParams,algoParams,fieldmap,r2starWa
         lib_name = 'libdecomposeGivenFieldMapAndDampings.so'
     elif sys.platform.startswith('darwin'): # macOS
         lib_name = 'libdecomposeGivenFieldMapAndDampings.dylib'
-    with resources.path('pycsemri', lib_name) as lib_path:
-        cpp_lib = ctypes.CDLL(str(lib_path))
+
+    # Robust library loading across Python versions
+    if has_modern_resources:
+        # Recommended approach for Python 3.9 - 3.12+
+        lib_path = resources.files('pycsemri').joinpath(lib_name)
+        with resources.as_file(lib_path) as path:
+            cpp_lib = ctypes.CDLL(str(path))
+    else:
+        # Fallback for Python 3.6 - 3.8
+        # resources.path is deprecated in newer versions but works in older ones
+        with resources.path('pycsemri', lib_name) as path:
+            cpp_lib = ctypes.CDLL(str(path))
+
 
     # Prepare inputs for C++ function
     c_double_p = ctypes.POINTER(ctypes.c_double)

@@ -1,19 +1,38 @@
 import ctypes
 import numpy as np
 import sys
-from importlib import resources
-
+# Handling importlib.resources compatibility for Python 3.6+
+try:
+    # Python 3.7+ standard library
+    from importlib import resources
+    # Check for the modern 'files' API introduced in 3.9
+    has_modern_resources = hasattr(resources, 'files')
+except ImportError:
+    # Backport for Python 3.6
+    import importlib_resources as resources
+    has_modern_resources = hasattr(resources, 'files')
+    
 # Load the shared library into ctypes
 lib_name = None
 if sys.platform.startswith('win'):
-	lib_name = 'libuwwfs.dll'
+    lib_name = 'libuwwfs.dll'
 elif sys.platform.startswith('linux'):
-	lib_name = 'libuwwfs.so'
+    lib_name = 'libuwwfs.so'
 elif sys.platform.startswith('darwin'): # macOS
-	lib_name = 'libuwwfs.dylib'
-with resources.path('pycsemri', lib_name) as lib_path:
-	libuwwfs = ctypes.CDLL(str(lib_path))
+    lib_name = 'libuwwfs.dylib'
 
+# Robust library loading across Python versions
+if has_modern_resources:
+    # Recommended approach for Python 3.9 - 3.12+
+    lib_path = resources.files('pycsemri').joinpath(lib_name)
+    with resources.as_file(lib_path) as path:
+        libuwwfs = ctypes.CDLL(str(path))
+else:
+    # Fallback for Python 3.6 - 3.8
+    # resources.path is deprecated in newer versions but works in older ones
+    with resources.path('pycsemri', lib_name) as path:
+        libuwwfs = ctypes.CDLL(str(path))
+    
 
 
 class ImDataParams_str(ctypes.Structure):
