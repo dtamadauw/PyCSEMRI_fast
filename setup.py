@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pycsemri",
-    version="0.2.3", # It's good practice to bump the version for new changes
+    version="0.2.4", # It's good practice to bump the version for new changes
     description="A package for CSEMRI with C++ accelerated components.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -27,9 +27,13 @@ setup(
     install_requires=[
         "numpy<1.20; python_version == '3.6'",
         "numpy; python_version >= '3.7'",
+        "scipy",
+        "importlib-resources",
+        "pydicom"
     ],
     
     # This corresponds to the `dynamic` "requires-python" field
     python_requires=">=3.6",
 )
+
 
