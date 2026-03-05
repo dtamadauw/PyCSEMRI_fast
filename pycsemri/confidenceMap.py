@@ -61,6 +61,14 @@ def _get_dicom_header_info(directory_path):
         header_info['PixelSpacing_X'] = pixel_spacing[0]
         header_info['PixelSpacing_Y'] = pixel_spacing[1]
 
+        acq_mat=np.squeeze(ds.get('AcquisitionMatrix', None))
+        acq_mat= acq_mat[acq_mat != 0]
+
+        header_info['RO_size'] = acq_mat[0]
+        header_info['PE_size'] = acq_mat[1]
+        header_info['AcquisitionTime'] = ds[0x0019, 0x105A].value * 1e-6
+        
+
         return header_info, dicom_file_path
 
     except Exception as e:
@@ -154,6 +162,11 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
         print(f"Could not read FrameOfReferenceUID. Generating a new one. Error: {e}")
         frame_of_reference_uid = generate_uid()
 
+    snr_bin = np.zeros(base_map.shape, dtype=bool)
+    swap_bin = np.zeros(base_map.shape, dtype=bool)
+    susc_bin = np.zeros(base_map.shape, dtype=bool)
+    ref_img = np.zeros(base_map.shape)
+
     for z in range(num_slices):
         dcm_path = sorted_dicom_paths[z]
         filename = os.path.basename(dcm_path)
@@ -163,6 +176,7 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
             ds_template = pydicom.dcmread(dcm_path)
             original_desc = ds_template.get("SeriesDescription", "Unknown")
             original_series_num = ds_template.get("SeriesNumber", 0)
+            ref_img[:, :, z] = ds_template.pixel_array
 
             # --- 1. Create and save the Confidence Map DICOM ---
             ds_cm = ds_template.copy()
@@ -178,6 +192,10 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
             ]
             overlay_image = _create_composite_overlay_image(base_slice, overlays)
 
+            snr_bin[:,:,z] = (snr_slice <= required_snr_slice)
+            swap_bin[:,:,z] = (swap_slice>0) 
+            susc_bin[:,:,z] = (susc_slice>0)
+
             ds_cm.SeriesInstanceUID = cm_series_uid
             ds_cm.FrameOfReferenceUID = frame_of_reference_uid
             ds_cm.SOPInstanceUID = generate_uid()
@@ -186,7 +204,7 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
             
             ds_cm.SamplesPerPixel = 3
             ds_cm.PhotometricInterpretation = "RGB"
-            ds_cm.PlanarConfiguration = 0
+            #ds_cm.PlanarConfiguration = 0
             ds_cm.BitsAllocated = 8
             ds_cm.BitsStored = 8
             ds_cm.HighBit = 7
@@ -202,14 +220,19 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
             
             # Set scaling factor to preserve quantitative values
             scale_factor = 1.0
-            scaled_slice = (base_slice * scale_factor).astype(np.uint16)
+            scaled_slice = (base_slice * scale_factor).astype(np.int16)
 
             ds_base.SeriesInstanceUID = base_series_uid
             ds_base.FrameOfReferenceUID = frame_of_reference_uid
             ds_base.SOPInstanceUID = generate_uid()
             ds_base.SeriesDescription = f"{original_desc} BaseMap"
             ds_base.SeriesNumber = original_series_num * 1000 + new_seno
+            ds_base.PixelRepresentation = 1
 
+            ds_base.BitsAllocated = 16
+            ds_base.BitsStored = 16
+            ds_base.HighBit = 15
+            ds_base.SamplesPerPixel = 1
             ds_base.PhotometricInterpretation = "MONOCHROME2"
             ds_base.PixelData = scaled_slice.tobytes()
             ds_base.save_as(os.path.join(base_output_dir, filename))
@@ -218,10 +241,90 @@ def _process_volume(base_map, snr_map, required_snr, swap_mask, susceptibility_m
             print(f"  Error processing slice {z} ({filename}): {e}")
 
     print(f"Finished processing {map_type} volume.")
+    swap_ref_mask = identify_swapped_regions(ref_img, swap_threshold=70.0, cleanup_mask=True)
+    swap_ref_mask = swap_ref_mask > 0
+
+    cm = {'SNR': snr_bin, 'swap': swap_bin, 'susc': susc_bin, 'swap_ref': swap_ref_mask}
+
+    return cm
+
+def _save_DICOM(water, input_dir, output_dir, map_type, new_seno):
+    """
+    Helper function to process a 3D volume, creating both overlay and base map DICOMs.
+    """
+    print(f"\n--- Processing {map_type} Volume ---")
+    
+    # Create subdirectories for the two output series
+    normalized_path = output_dir.rstrip(os.sep)
+    water_output_dir = output_dir
+    os.makedirs(water_output_dir, exist_ok=True)
+
+    # Get and sort DICOM files by InstanceNumber
+    try:
+        dicom_files_with_instance = []
+        for filename in os.listdir(input_dir):
+            if filename.lower().endswith(('.dcm', '')):
+                dcm_path = os.path.join(input_dir, filename)
+                ds = pydicom.dcmread(dcm_path, stop_before_pixels=True)
+                instance_num = ds.get("InstanceNumber", 0)
+                dicom_files_with_instance.append((instance_num, dcm_path))
+        
+        dicom_files_with_instance.sort()
+        sorted_dicom_paths = [path for _, path in dicom_files_with_instance]
+    except Exception as e:
+        print(f"Error reading or sorting DICOMs in {input_dir}: {e}")
+        return
+
+    num_slices = water.shape[2]
+    if len(sorted_dicom_paths) != num_slices:
+        print(f"Error: Mismatch between numpy slices ({num_slices}) and DICOM files ({len(sorted_dicom_paths)}).")
+        return
+
+    print(f"Found {len(sorted_dicom_paths)} DICOM files, matching {num_slices} array slices.")
+
+    # Generate UIDs for the two new series
+    cm_series_uid = generate_uid()
+    base_series_uid = generate_uid()
+    try:
+        first_slice_ds = pydicom.dcmread(sorted_dicom_paths[0], stop_before_pixels=True)
+        frame_of_reference_uid = first_slice_ds.get("FrameOfReferenceUID", generate_uid())
+    except Exception as e:
+        print(f"Could not read FrameOfReferenceUID. Generating a new one. Error: {e}")
+        frame_of_reference_uid = generate_uid()
+
+    for z in range(num_slices):
+        dcm_path = sorted_dicom_paths[z]
+        filename = os.path.basename(dcm_path)
+        
+        try:
+            base_slice = water[:, :, z]
+            ds_template = pydicom.dcmread(dcm_path)
+            original_desc = ds_template.get("SeriesDescription", "Unknown")
+            original_series_num = ds_template.get("SeriesNumber", 0)
+
+            ds_base = ds_template.copy()
+            
+            # Set scaling factor to preserve quantitative values
+            scale_factor = 1.0
+            scaled_slice = (base_slice * scale_factor).astype(np.uint16)
+
+            ds_base.SeriesInstanceUID = base_series_uid
+            ds_base.FrameOfReferenceUID = frame_of_reference_uid
+            ds_base.SOPInstanceUID = generate_uid()
+            ds_base.SeriesDescription = f"{original_desc} Water"
+            ds_base.SeriesNumber = original_series_num * 1000 + new_seno
+
+            ds_base.PixelData = scaled_slice.tobytes()
+            ds_base.save_as(os.path.join(water_output_dir, filename))
+
+        except Exception as e:
+            print(f"  Error processing slice {z} ({filename}): {e}")
+
+    print(f"Finished processing {map_type} volume.")
 
 
 def generate_confidence_map_dicoms(
-    ims, pdff, r2s, snr_map, imDataParams,
+    ims, water, pdff, r2s, snr_map, imDataParams,
     required_snr_for_pdff, required_snr_for_r2s,
     dcm_ref_dir, dcm_out_dir,
     smoothing_kernel_size=1
@@ -286,7 +389,7 @@ def generate_confidence_map_dicoms(
         required_r2s_to_use = required_snr_for_r2s
 
     # Process PDFF Volume
-    _process_volume(
+    cm_pdff = _process_volume(
         base_map=pdff,
         snr_map=snr_map_to_use,
         required_snr=required_pdff_to_use,
@@ -300,7 +403,7 @@ def generate_confidence_map_dicoms(
     )
 
     # Process R2* Volume
-    _process_volume(
+    cm_r2s = _process_volume(
         base_map=r2s,
         snr_map=snr_map_to_use,
         required_snr=required_r2s_to_use,
@@ -313,4 +416,13 @@ def generate_confidence_map_dicoms(
         new_seno=2
     )
 
+    _save_DICOM(water=water,
+                 input_dir=dcm_ref_dir,
+                 output_dir=os.path.join(dcm_out_dir, 'water'),
+                 map_type="water",
+                 new_seno=4
+                 )
+
     print("\n--- 3D Confidence Map Generation Finished ---")
+
+    return cm_pdff, cm_r2s, header_data

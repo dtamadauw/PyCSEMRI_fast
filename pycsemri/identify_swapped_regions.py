@@ -53,7 +53,7 @@ def identify_swapped_regions(pdff_map, swap_threshold=70.0, cleanup_mask=True):
         
         # Define a structuring element for the filter.
         # This creates a 3x3 (or 3x3x3 for 3D) neighborhood.
-        structure = np.ones([3] * pdff_map.ndim)
+        structure = np.ones((3,3,1))
         
         # Perform binary opening: Removes small, isolated "salt" noise.
         # This erodes the mask and then dilates it back.
