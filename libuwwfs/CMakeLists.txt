@@ -14,6 +14,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+option(ENABLE_DEBUG_FILES "Enable generation of debug .txt files" OFF)
+
+
 # --- Shared Library ---
 add_library(uwwfs SHARED
     libuwwfs.cpp
@@ -61,22 +64,27 @@ foreach(target uwwfs uwwfs_static)
         EIGEN_DONT_PARALLELIZE  # force Eigen single-thread
     )
 
+
+
+    if(ENABLE_DEBUG_FILES)
+        target_compile_definitions(${target} PRIVATE FAST_WFS_DEBUG)
+    endif()
+
+
     # Per-compiler optimization flags
     target_compile_options(${target} PRIVATE
         -O3
         -march=native
-        -ffast-math
         -fno-math-errno
         -fno-trapping-math
-        $<$<CONFIG:Release>:-flto>
     )
 
-    # LTO and aggressive linker opts (Release only)
+
+    # Linker opts
     target_link_options(${target} PRIVATE
-        $<$<CONFIG:Release>:-flto>
-        $<$<CONFIG:Release>:-Wl,-O3>
     )
 endforeach()
+
 
 # --- Install ---
 

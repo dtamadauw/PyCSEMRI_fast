@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Tamada"
+  given-names: "Daiki"
+  orcid: "https://orcid.org/0000-0003-3615-459X"
+- family-names: "Hernando"
+  given-names: "Diego"
+  orcid: "https://orcid.org/0000-0002-0016-0317"
+- family-names: "Reeder"
+  given-names: "Scott B."
+  orcid: "https://orcid.org/0000-0003-4728-8171"
+title: "PyCSEMRI: A Portable Python Package for Fast and Robust Water-Fat Separation in Chemical Shift Encoded MRI"
+version: 0.2.4
+date-released: 2026-03-08
+url: "https://github.com/dtamadauw/PyCSEMRI_fast"

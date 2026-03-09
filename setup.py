@@ -16,7 +16,7 @@ setup(
     author="Daiki Tamada",
     author_email="dtamada@wisc.edu",
     url="https://github.com/your-username/PyCSEMRI_fast",
-    license="GPL",
+    license="Mozilla Public License 2.0 (MPL 2.0)",
     
     # This now points to your new directory name
     packages=["pycsemri"],

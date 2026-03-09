@@ -740,6 +740,7 @@ void VARPRO_LUT(imDataParams_str *imDataParams, algoParams_str *algoParams, outI
 #ifdef FAST_WFS_DEBUG
     std::cout << "  *** DEBUG MODE ENABLED: Writing intermediate files. ***" << std::endl;
 #endif
+
     
     // --- Full Resolution Parameters ---
     int nx = imDataParams->im_dim[0];
@@ -748,8 +749,14 @@ void VARPRO_LUT(imDataParams_str *imDataParams, algoParams_str *algoParams, outI
     long long n_voxels = (long long)nx * ny;
 
 
-    for (int i=0;i<n_voxels*nTE;i++){
-        imDataParams->images_i[i] = -1.0*imDataParams->images_i[i];
+    // Conjugate images if PrecessionIsClockwise <= 0 (matches Python behavior)
+    // Note: Python's fw_i2cm1i_graphcut.py already does this, so if called from there,
+    // PrecessionIsClockwise will be 1 and this loop will be skipped.
+    if (imDataParams->PrecessionIsClockwise <= 0) {
+        std::cout << "  Conjugating input images (PrecessionIsClockwise <= 0)..." << std::endl;
+        for (long long i = 0; i < n_voxels * nTE; i++) {
+            imDataParams->images_i[i] = -1.0 * imDataParams->images_i[i];
+        }
     }
 
     // --- *** NEW: Coarse-to-Fine Subsampling Logic *** ---

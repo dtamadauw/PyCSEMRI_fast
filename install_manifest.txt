@@ -1,0 +1,4 @@
+/Users/dxt005/Documents/PyCSEMRI_fast/pycsemri/libuwwfs.dylib
+/Users/dxt005/Documents/PyCSEMRI_fast/pycsemri/libuwwfs.a
+/Users/dxt005/Documents/PyCSEMRI_fast/pycsemri/libgraphCutIterations.dylib
+/Users/dxt005/Documents/PyCSEMRI_fast/pycsemri/libdecomposeGivenFieldMapAndDampings.dylib
