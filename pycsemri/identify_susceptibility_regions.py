@@ -50,15 +50,23 @@ def identify_susceptibility_regions(ims, r2s_map, imDataParams, resolution):
     # The gradient is calculated in physical units (Hz/mm).
     print(f"Calculating field gradient along Z-axis (slice thickness = {resolution[2]} mm)...")
     # np.gradient calculates the central difference. The third argument is the spacing.
-    _, _, field_gradient_z = np.gradient(field_map, resolution[0], resolution[1], resolution[2])
+    field_gradient_x, field_gradient_y, field_gradient_z = np.gradient(field_map, resolution[0], resolution[1], resolution[2])
     
     # We are interested in the magnitude of the gradient
-    field_gradient_z_abs = np.abs(field_gradient_z)
+    #field_gradient_z_abs = np.abs(field_gradient_z)
+    field_gradient_z_abs = np.sqrt(field_gradient_x**2 + field_gradient_y**2 + field_gradient_z**2)
+    #field_gradient_z_abs = np.sqrt(field_gradient_x**2 + field_gradient_y**2)
 
     # --- Step 3: Smooth the field gradient ---
     # A small sigma is used for gentle smoothing to reduce noise before thresholding.
     print("Smoothing the field gradient map...")
-    smoothed_field_gradient = gaussian_filter(field_gradient_z_abs, sigma=1)
+    #smoothed_field_gradient = gaussian_filter(field_gradient_z_abs, sigma=5)
+    def _smooth_map(input_map):
+        smoothed_map = np.zeros_like(input_map)
+        for z in range(input_map.shape[2]):
+            smoothed_map[:, :, z] = uniform_filter(input_map[:, :, z], size=9, mode='nearest')
+        return smoothed_map
+    smoothed_field_gradient = _smooth_map(field_gradient_z_abs)
 
     # --- Step 4: Calculate the R2* dependent threshold ---
     print("Calculating dynamic threshold for R2* mask...")

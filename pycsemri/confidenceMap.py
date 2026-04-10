@@ -89,11 +89,27 @@ def _create_composite_overlay_image(base_map_slice, overlays, overlay_alpha=0.2)
     Returns:
         np.ndarray: The resulting 3D RGB image array of type uint8.
     """
+
     # Normalize the base map to 0-255 range for grayscale display
-    map_min = np.min(base_map_slice)
-    map_max = np.max(base_map_slice)
-    norm_map = (base_map_slice - map_min) / (map_max - map_min + 1e-9)
-    norm_map_uint8 = (norm_map * 255).astype(np.uint8)
+    #Define the percentile bounds (e.g., 2nd and 98th percentile)
+    # This ignores the extreme spikes and focuses on the 0-500 range.
+    lower_bound = np.percentile(base_map_slice, 5)
+    upper_bound = np.percentile(base_map_slice, 90)
+    clipped_map = np.clip(base_map_slice, lower_bound, upper_bound)
+    map_min = np.min(clipped_map)
+    map_max = np.max(clipped_map)
+    range_diff = map_max - map_min
+    if range_diff == 0:
+        norm_map_uint8 = np.zeros_like(base_map_slice, dtype=np.uint8)
+    else:
+        norm_map = (clipped_map - map_min) / range_diff
+        norm_map_uint8 = (norm_map * 255).astype(np.uint8)
+
+    
+    #map_min = np.min(base_map_slice)
+    #map_max = np.max(base_map_slice)
+    #norm_map = (base_map_slice - map_min) / (map_max - map_min + 1e-9)
+    #norm_map_uint8 = (norm_map * 255).astype(np.uint8)
 
     # Convert the grayscale map to the final RGB image
     final_image = np.stack([norm_map_uint8] * 3, axis=-1)
@@ -388,13 +404,17 @@ def generate_confidence_map_dicoms(
         required_pdff_to_use = required_snr_for_pdff
         required_r2s_to_use = required_snr_for_r2s
 
+        
+    field_grad_mask_pdff_to_use = field_grad_mask_pdff
+    field_grad_mask_r2s_to_use = field_grad_mask_r2s
+
     # Process PDFF Volume
     cm_pdff = _process_volume(
         base_map=pdff,
         snr_map=snr_map_to_use,
         required_snr=required_pdff_to_use,
         swap_mask=swap_mask,
-        susceptibility_mask=field_grad_mask_pdff,
+        susceptibility_mask=field_grad_mask_pdff_to_use,
         input_dir=dcm_ref_dir,
         output_dir=os.path.join(dcm_out_dir, 'PDFF'),
         map_type="PDFF",
@@ -408,11 +428,11 @@ def generate_confidence_map_dicoms(
         snr_map=snr_map_to_use,
         required_snr=required_r2s_to_use,
         swap_mask=swap_mask,
-        susceptibility_mask=field_grad_mask_r2s,
+        susceptibility_mask=field_grad_mask_r2s_to_use,
         input_dir=dcm_ref_dir,
         output_dir=os.path.join(dcm_out_dir, 'R2s'),
         map_type="R2s",
-        susc_color=[0, 0, 255],  # Blue for R2* susceptibility
+        susc_color=[0, 255, 0],#[0, 0, 255],  # Blue for R2* susceptibility
         new_seno=2
     )
 
