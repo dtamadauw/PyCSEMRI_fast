@@ -103,18 +103,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on reporting bugs and subm
 
 Mozilla Public License 2.0 (MPL 2.0). See [LICENSE.md](LICENSE.md).
 
-## Citation
-
-If you use this software, please cite:
-
-```bibtex
-@article{Tamada2026,
-  author  = {Tamada, Daiki and Hernando, Diego and Reeder, Scott B.},
-  title   = {PyCSEMRI: A Portable Python Package for Fast and Robust Water-Fat Separation in Chemical Shift Encoded MRI},
-  journal = {Journal of Open Source Software},
-  year    = {2026}
-}
-```
 
 ## References
 
